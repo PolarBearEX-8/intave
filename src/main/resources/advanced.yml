@@ -27,12 +27,6 @@ check:
     # Check for NoSlowdown cheats?
     enforce-item-slowdown: true
 
-    # Disable tick leniency for velocity packets
-    no-speculative-velocity: true
-
-    # Disable bundling of Ping packets with their respective attach packets
-    no-bundling: false
-
     on-detection:
       # Can help reduce item-related false positives
       reset-item-usage: true
@@ -215,7 +209,10 @@ check:
 
 cloud:
   # Should Intave connect to the cloud?
-  enabled: false
+  enabled: true
+
+  # Cloud token
+  token: "ct_EXAMPLE-TOKEN"
 
   features:
     # Should Intave use the cloud to store metadata?
@@ -310,13 +307,8 @@ logging:
   cloud-log-ids: true
   # Verbose mode (ALL, MITIGATED, SELECTED)
   verbose-mode: MITIGATED
-
   # debugging purposes, do not activate
   #feedback-dump: false
-
-analytics:
-  errorReporting: true
-  usageReporting: true
 
 layout:
   verbose: "{prefix} &c{player}&7/{trust-color}&7 {message} {details} (+{vladded} -> {vl})"

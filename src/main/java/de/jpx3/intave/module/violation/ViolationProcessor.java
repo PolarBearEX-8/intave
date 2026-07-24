@@ -1,3 +1,14 @@
+/*
+ * Copyright 2026 Intave
+ *
+ * This software is licensed under the PolyForm Perimeter License 1.0.0.
+ * You may use this software for any purpose, except for providing to
+ * others any product that competes with the software.
+ *
+ * A copy of the license is available at:
+ *   https://polyformproject.org/licenses/perimeter/1.0.0/
+ */
+
 package de.jpx3.intave.module.violation;
 
 import de.jpx3.intave.IntaveLogger;
@@ -7,8 +18,7 @@ import de.jpx3.intave.access.check.event.IntaveViolationEvent;
 import de.jpx3.intave.access.player.trust.TrustFactor;
 import de.jpx3.intave.check.Check;
 import de.jpx3.intave.check.CheckStatistics;
-import de.jpx3.intave.connect.cloud.LogTransmittor;
-import de.jpx3.intave.connect.proxy.protocol.packets.IntavePacketOutKicked;
+import de.jpx3.intave.cloud.LogTransmittor;
 import de.jpx3.intave.executor.Synchronizer;
 import de.jpx3.intave.math.MathHelper;
 import de.jpx3.intave.metric.ServerHealth;
@@ -316,19 +326,7 @@ public final class ViolationProcessor extends Module {
   private void executeCommand(ViolationContext violationContext, String command) {
     Violation violation = violationContext.violation();
     Player player = violation.findPlayer().orElseThrow(IllegalStateException::new);
-    String checkName = violation.check().name().toLowerCase(Locale.ROOT);
-    Synchronizer.synchronize(() -> {
-      boolean playerRemoved = command.startsWith("ban") || command.startsWith("kick");
-      if (playerRemoved) {
-        Modules.mitigate().reconnectionLimiter().ban(player.getAddress().getAddress(), player.getUniqueId(), checkName);
-        plugin.proxy().sendPacket(player, new IntavePacketOutKicked(
-          player.getUniqueId(),
-          checkName,
-          violation.message(),
-          violationContext.violationLevelAfter()
-        ));
-      }
-
+	  Synchronizer.synchronize(() -> {
       LogTransmittor logTransmittor = IntavePlugin.singletonInstance().logTransmittor();
       logTransmittor.addPlayerLog(player, "(EXE) " + command);
 
