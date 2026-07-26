@@ -12,6 +12,9 @@
 package de.jpx3.intave.check.movement.physics.branch;
 
 import de.jpx3.intave.check.movement.physics.environment.SimulationEnvironment;
+import de.jpx3.intave.share.Input;
+import de.jpx3.intave.user.User;
+import de.jpx3.intave.user.meta.MovementMetadata;
 import de.jpx3.intave.user.meta.ProtocolMetadata;
 
 import java.util.List;
@@ -34,7 +37,9 @@ final class JumpBrancher extends MovementSearchBrancher {
     }
 
     SimulationEnvironment environment = inputBranch.modifiedMutableView(input.environment());
-    ProtocolMetadata protocol = input.user().meta().protocol();
+    User user = input.user();
+    MovementMetadata movement = user.meta().movement();
+    ProtocolMetadata protocol = user.meta().protocol();
     boolean estimatedJump = Math.abs(environment.offsetMotionY() - environment.jumpMotion()) < 0.0001;
 
     int writtenOutputBranches = 0;
@@ -48,8 +53,21 @@ final class JumpBrancher extends MovementSearchBrancher {
       if (!jumped && restricted && inputBranch.moveConfig().isSprinting() && environment.isSneaking() && !protocol.combatUpdate()) {
         continue;
       }
+      if (protocol.sendsInputs()) {
+        Input sentInput = movement.input;
+        boolean claimedJumping = sentInput.jumpKey();
+        // user can press jump, tell us he's jumping, but the client not actually jump
+        // we can only enforce it so that if he didn't claim pressing jump, he is not allowed to
+        if (jumped && !claimedJumping) {
+          continue;
+        }
+      }
       writtenOutputBranches++;
-      outputBranches.add(inputBranch.withJumped(jumped));
+      if (estimatedJump) {
+        outputBranches.add(inputBranch.withPredictedJumped(jumped));
+      } else {
+        outputBranches.add(inputBranch.withJumped(jumped));
+      }
     }
     if (writtenOutputBranches == 0) {
       outputBranches.add(inputBranch.withJumped(false));

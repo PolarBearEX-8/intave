@@ -1,7 +1,7 @@
 ---
-name: Bug report
-about: Create a report to help us improve
-title: ''
+name: Other bugs
+about: Report general non-movement bug reports
+title: '[Bug] '
 labels: bug
 assignees: ventolotl
 

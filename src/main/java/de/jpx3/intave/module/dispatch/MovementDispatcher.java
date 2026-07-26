@@ -17,7 +17,6 @@ import com.comphenix.protocol.ProtocolManager;
 import com.comphenix.protocol.events.PacketContainer;
 import com.comphenix.protocol.events.PacketEvent;
 import com.comphenix.protocol.reflect.StructureModifier;
-import com.comphenix.protocol.wrappers.BlockPosition;
 import com.comphenix.protocol.wrappers.EnumWrappers;
 import de.jpx3.intave.IntaveControl;
 import de.jpx3.intave.IntavePlugin;
@@ -35,7 +34,8 @@ import de.jpx3.intave.check.CheckService;
 import de.jpx3.intave.check.movement.Physics;
 import de.jpx3.intave.check.movement.Timer;
 import de.jpx3.intave.check.movement.physics.environment.Pose;
-import de.jpx3.intave.check.movement.physics.update.VelocityUpdate;
+import de.jpx3.intave.check.movement.physics.update.MotionAddUpdate;
+import de.jpx3.intave.check.movement.physics.update.MotionSetUpdate;
 import de.jpx3.intave.check.world.InteractionRaytrace;
 import de.jpx3.intave.executor.Synchronizer;
 import de.jpx3.intave.math.Hypot;
@@ -275,32 +275,6 @@ public final class MovementDispatcher extends Module {
   }
 
   @PacketSubscription(
-    priority = ListenerPriority.HIGH,
-    packetsOut = {
-      EXPLOSION
-    }
-  )
-  public void sentExplosion(
-    User user, ExplosionReader reader,
-    PacketEvent event
-  ) {
-    Motion knockback = reader.motion();
-    if (knockback != null) {
-      user.packetTickFeedback(event, () -> {
-        if (IntaveControl.DEBUG_VELOCITY_RECEIVE) {
-          user.sendMessage("§a" + MathHelper.formatMotion(knockback));
-        }
-        MovementMetadata movement = user.meta().movement();
-        movement.baseMotionX += knockback.motionX;
-        movement.baseMotionY += knockback.motionY;
-        movement.baseMotionZ += knockback.motionZ;
-
-        movement.clearPostTickMotionCandidates();
-      });
-    }
-  }
-
-  @PacketSubscription(
     priority = ListenerPriority.LOW,
     packetsIn = {
       FLYING, LOOK, POSITION, POSITION_LOOK, VEHICLE_MOVE
@@ -438,6 +412,12 @@ public final class MovementDispatcher extends Module {
       BoundingBox box = movement.boundingBox().grow(0.1);
       BlockShape shape = Collision.shape(user, movement, box);
       drawDebugBoxes(user, BlockShapes.optimize(shape).elementaryBoxes());
+    }
+
+    if (user.receives(MessageChannel.DEBUG_HITBOX)) {
+      for (Position vertex : movement.boundingBox().vertices()) {
+        Particles.spawnVillagerHappyParticleAt(user, vertex);
+      }
     }
 
     if (movement.awaitTeleport || movement.awaitOutgoingTeleport) {
@@ -641,7 +621,7 @@ public final class MovementDispatcher extends Module {
     }
     inventory.lastFoodConsumptionBlockRequest = System.currentTimeMillis();
     PacketContainer packet = protocolManager.createPacket(PacketType.Play.Client.BLOCK_DIG);
-    packet.getBlockPositionModifier().write(0, new BlockPosition(0, 0, 0));
+    packet.getBlockPositionModifier().write(0, new com.comphenix.protocol.wrappers.BlockPosition(0, 0, 0));
     packet.getDirections().write(0, EnumWrappers.Direction.DOWN);
     packet.getPlayerDigTypes().write(0, EnumWrappers.PlayerDigType.RELEASE_USE_ITEM);
     user.ignoreNextInboundPacket();
@@ -762,7 +742,7 @@ public final class MovementDispatcher extends Module {
     User user = UserRepository.userOf(player);
     MovementMetadata movementData = user.meta().movement();
     PacketContainer packet = event.getPacket();
-    if (MinecraftVersions.VER1_21_3.atOrAbove()) {
+    if (MinecraftVersions.VER1_21_3.atOrAbove() && user.meta().protocol().sendsInputs()) {
       StructureModifier<Boolean> inputBooleans = packet.getStructures().read(0).getBooleans();
       movementData.lastInput = movementData.input;
       movementData.input = new Input(
@@ -774,6 +754,9 @@ public final class MovementDispatcher extends Module {
         inputBooleans.read(5),
         inputBooleans.read(6)
       );
+      if (user.receives(MessageChannel.DEBUG_SENT_INPUT)) {
+        ActionBar.sendActionBar(player, String.valueOf(movementData.input));
+      }
     } else {
       int strafeKey = (int) (packet.getFloat().read(0) / 0.98f);
       int forwardKey = (int) (packet.getFloat().read(1) / 0.98f);
@@ -858,7 +841,7 @@ public final class MovementDispatcher extends Module {
     }
     if (reader.animation() == AnimationReader.Animation.WAKEUP) {
       MovementMetadata movement = user.meta().movement();
-      de.jpx3.intave.share.BlockPosition sleepingBedPosition = movement.sleepingBedPosition;
+      BlockPosition sleepingBedPosition = movement.sleepingBedPosition;
       if (sleepingBedPosition != null) {
         Optional<Position> wakeupPosition = BedWakeupPositionSearch.findStandUpPosition(user, sleepingBedPosition, 0);
         user.packetTickFeedback(event, () -> {
@@ -930,19 +913,19 @@ public final class MovementDispatcher extends Module {
 
       Motion finalVelocity = motion.copy();
 
-      AtomicReference<VelocityUpdate> velocity = new AtomicReference<>(null);
+      AtomicReference<MotionSetUpdate> velocity = new AtomicReference<>(null);
       user.doubleTickFeedback(event,
         () -> {
-	        velocity.set(VelocityUpdate.openEnded(
+	        velocity.set(MotionSetUpdate.openEnded(
 		        finalVelocity,
 		        movementData
 	        ));
           movementData.queueTickAmbiguousUpdate(velocity.get());
         },
         () -> {
-          VelocityUpdate myVelocityUpdate = velocity.get();
-          if (myVelocityUpdate != null) {
-            myVelocityUpdate.canNotRunAfterThisTick(movementData);
+          MotionSetUpdate myMotionSetUpdate = velocity.get();
+          if (myMotionSetUpdate != null) {
+            myMotionSetUpdate.canNotRunAfterThisTick(movementData);
           }
           // legacy behavior
           receiveVelocity(player, finalVelocity);
@@ -951,6 +934,39 @@ public final class MovementDispatcher extends Module {
       );
 
       movementData.activeTick(RECEIVED_VELOCITY_PACKET);
+    }
+  }
+
+  @PacketSubscription(
+    priority = ListenerPriority.HIGH,
+    packetsOut = {
+      EXPLOSION
+    }
+  )
+  public void sentExplosion(
+    User user, ExplosionReader reader,
+    PacketEvent event
+  ) {
+    MovementMetadata movement = user.meta().movement();
+    Motion knockback = reader.motion();
+    if (knockback != null) {
+      AtomicReference<MotionAddUpdate> update = new AtomicReference<>(null);
+      user.doubleTickFeedback(event,
+        () -> {
+          update.set(MotionAddUpdate.openEnded(
+            knockback,
+            movement
+          ));
+          movement.queueTickAmbiguousUpdate(update.get());
+        },
+        () -> {
+          MotionAddUpdate myMotionAddUpdate = update.get();
+          if (myMotionAddUpdate != null) {
+            myMotionAddUpdate.canNotRunAfterThisTick(movement);
+          }
+          movement.pendingVelocityPackets.decrementAndGet();
+        }
+      );
     }
   }
 
@@ -1182,7 +1198,7 @@ public final class MovementDispatcher extends Module {
       InputConverter.inputClass, InputConverter.INSTANCE
     );
     Input input = inputs.read(0);
-    boolean sneaking = input.sneaking();
+    boolean sneaking = input.sneakKey();
     if (sneaking && !movement.sneaking) {
       startSneak(user, event);
     } else if (!sneaking && movement.sneaking) {
