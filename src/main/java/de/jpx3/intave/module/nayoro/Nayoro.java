@@ -27,7 +27,6 @@ import de.jpx3.intave.user.UserLocal;
 import de.jpx3.intave.user.UserRepository;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
-import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.jetbrains.annotations.NotNull;
 
@@ -36,13 +35,12 @@ import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.zip.InflaterInputStream;
-
-import static de.jpx3.intave.module.nayoro.OperationalMode.*;
 
 public final class Nayoro extends Module {
   private static final OperationalMode MODE = IntaveControl.SAMPLE_OPERATIONAL_MODE;
@@ -68,27 +66,6 @@ public final class Nayoro extends Module {
   }
 
   @BukkitEventSubscription
-  public void on(PlayerJoinEvent join) {
-    Player player = join.getPlayer();
-    askForSampleTransmission(player);
-  }
-
-  public synchronized void askForSampleTransmission(Player player) {
-    User user = UserRepository.userOf(player);
-//    if (IntaveControl.GOMME_MODE && MODE == GOMME_UPLOAD && player.hasPermission("intave.sample.allow")) {
-//      enableRecordingFor(user, null, GOMME_UPLOAD);
-//      return;
-//    }
-    Cloud cloud = IntavePlugin.singletonInstance().cloud();
-    if (!cloud.available()) {
-      return;
-    }
-    cloud.requestSampleTransmission(player, classifier -> {
-      enableRecordingFor(user, classifier, CLOUD_TRANSMISSION);
-    });
-  }
-
-  @BukkitEventSubscription
   public void on(PlayerQuitEvent quit) {
     User user = UserRepository.userOf(quit.getPlayer());
     if (recordingActiveFor(user)) {
@@ -96,11 +73,22 @@ public final class Nayoro extends Module {
     }
   }
 
-  public synchronized void enableRecordingFor(User user, Classifier classifier, OperationalMode mode) {
+  @Deprecated
+  public synchronized void enableRecordingFor(
+    User user, Classifier classifier,
+    OperationalMode mode
+  ) {
+    enableRecordingFor(user, classifier, mode, UUID.randomUUID());
+  }
+
+  public synchronized void enableRecordingFor(
+    User user, Classifier classifier,
+    OperationalMode mode, UUID transmissionId
+  ) {
     localRecordingLock.lock();
     try {
       if (!Bukkit.isPrimaryThread()) {
-        Synchronizer.synchronize(() -> enableRecordingFor(user, classifier, mode));
+        Synchronizer.synchronize(() -> enableRecordingFor(user, classifier, mode, transmissionId));
         return;
       }
       if (recordingActiveFor(user)) {
@@ -110,7 +98,7 @@ public final class Nayoro extends Module {
       recordingMode.put(user.id(), mode);
       Sample sample = new Sample();
       samples.put(user.id(), sample);
-      OutputStream output = writeStreamFor(user.player(), sample, mode);
+      OutputStream output = writeStreamFor(user.player(), sample, mode, transmissionId);
       RecordEventSink recordEventSink = new RecordEventSink(new LiveEnvironment(user), new DataOutputStream(output), classifier);
       eventSinks.get(user).add(recordEventSink);
     } finally {
@@ -149,18 +137,11 @@ public final class Nayoro extends Module {
         .collect(Collectors.toList());
       remove.forEach(eventSinks.get(user)::remove);
       Sample sample = samples.remove(user.id());
-      if (mode == GOMME_UPLOAD) {
-        try {
-          sample.uploadAndDelete();
-        } catch (IOException e) {
-          throw new RuntimeException(e);
-        }
-      }
       if (sample != null && !mode.keepCopyOfSamples()) {
         sample.delete();
       }
       Cloud cloud = IntavePlugin.singletonInstance().cloud();
-      cloud.noteEndOfSampleTransmission(user.player());
+//      cloud.noteEndOfSampleTransmission(user.player());
     } finally {
       localRecordingLock.unlock();
     }
@@ -170,7 +151,12 @@ public final class Nayoro extends Module {
     return eventSinks.get(user);
   }
 
-  public OutputStream writeStreamFor(Player player, Sample sample, OperationalMode mode) {
+  private final static int CLOUD_TRANSMISSION_BUFFER_SIZE = 1024 * 8;
+
+  public OutputStream writeStreamFor(
+    Player player, Sample sample,
+    OperationalMode mode, UUID transmissionId
+  ) {
     switch (mode) {
       case DISABLE:
         return new OutputStream() {
@@ -178,12 +164,10 @@ public final class Nayoro extends Module {
           public void write(int b) {}
         };
 
-      case GOMME_UPLOAD:
-        return sample.resource().writeStream();
-      case CLOUD_STORAGE:
       case CLOUD_TRANSMISSION:
-        boolean storage = mode == CLOUD_STORAGE;
         return new ManualBufferedOutputStream(new OutputStream() {
+          private final AtomicInteger sampleSubIndex = new AtomicInteger(0);
+
           @Override
           public void write(int b) {
             throw new UnsupportedOperationException("Not implemented, expected buffered output stream");
@@ -201,14 +185,14 @@ public final class Nayoro extends Module {
             byte[] writeStream = outputStream.toByteArray();
             ByteBuffer buffer = ByteBuffer.wrap(writeStream);
             IntavePlugin plugin = IntavePlugin.singletonInstance();
-            plugin.cloud().uploadSample(player, buffer);
+            plugin.cloud().uploadSample(player, buffer, transmissionId, sampleSubIndex.getAndIncrement());
           }
 
           @Override
-          public void flush() throws IOException {
+          public void flush() {
             // no-op
           }
-        }, 1024 * 24);
+        }, CLOUD_TRANSMISSION_BUFFER_SIZE);
       case LOCAL_STORAGE:
         return sample.resource().writeStream();
       default:

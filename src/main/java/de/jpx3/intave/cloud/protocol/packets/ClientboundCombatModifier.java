@@ -14,14 +14,13 @@ package de.jpx3.intave.cloud.protocol.packets;
 import com.google.gson.stream.JsonReader;
 import com.google.gson.stream.JsonToken;
 import com.google.gson.stream.JsonWriter;
-import de.jpx3.intave.cloud.protocol.Identity;
 import de.jpx3.intave.cloud.protocol.JsonPacket;
 import de.jpx3.intave.cloud.protocol.listener.Clientbound;
 
 import static de.jpx3.intave.cloud.protocol.Direction.CLIENTBOUND;
 
 public final class ClientboundCombatModifier extends JsonPacket<Clientbound> {
-  private Identity id;
+  private long id;
   private String modifier;
   private int duration;
 
@@ -33,13 +32,12 @@ public final class ClientboundCombatModifier extends JsonPacket<Clientbound> {
   public void serialize(JsonWriter writer) {
     try {
       writer.beginObject();
-      writer.name("id");
-      id.serialize(writer);
+      writer.name("id").value(id);
       writer.name("modifier").value(modifier);
       writer.name("duration").value(duration);
       writer.endObject();
     } catch (Exception e) {
-      e.printStackTrace();
+      throw new IllegalStateException("Unable to serialize combat modifier packet", e);
     }
   }
 
@@ -51,7 +49,7 @@ public final class ClientboundCombatModifier extends JsonPacket<Clientbound> {
         while (reader.peek() == JsonToken.NAME) {
           switch (reader.nextName()) {
             case "id":
-              id = Identity.from(reader);
+              id = reader.nextLong();
               break;
             case "modifier":
               modifier = reader.nextString();
@@ -67,11 +65,11 @@ public final class ClientboundCombatModifier extends JsonPacket<Clientbound> {
       }
       reader.endObject();
     } catch (Exception e) {
-      e.printStackTrace();
+      throw new IllegalStateException("Unable to deserialize combat modifier packet", e);
     }
   }
 
-  public Identity identity() {
+  public long id() {
     return id;
   }
 

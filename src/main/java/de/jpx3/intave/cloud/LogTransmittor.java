@@ -95,7 +95,7 @@ public final class LogTransmittor implements BukkitEventSubscriber {
   private final List<LogIdRequest> requests = new LinkedList<>();
 
   public void awaitLogIdOf(Player player, Consumer<? super String> logIdCallback) {
-    if (cloud.available()) {
+    if (cloud.isConnected()) {
       LogIdRequest request = new LogIdRequest(logIdCallback);
       requests.add(request);
       logIdCallback = request;
@@ -152,23 +152,23 @@ public final class LogTransmittor implements BukkitEventSubscriber {
   }
 
   private void uploadLogOf(Player player, Consumer<? super String> logIdCallback) {
-    LogState logState = logStateOf(player);
-    if (logState.logId() != null) {
-      logIdCallback.accept(logState.logId());
-    }
-    cloud.uploadPlayerLogs(
-      player,
-      logState.currentNonce(),
-      new ArrayList<>(logState.pendingLogs()),
-      logId -> {
-        if (logState.logId() == null) {
-          logIdCallback.accept(logId);
-        }
-        logState.setLogId(logId);
-      }
-    );
-    logState.nextNonce();
-    logState.clearPendingLogs();
+//    LogState logState = logStateOf(player);
+//    if (logState.logId() != null) {
+//      logIdCallback.accept(logState.logId());
+//    }
+//    cloud.uploadPlayerLogs(
+//      player,
+//      logState.currentNonce(),
+//      new ArrayList<>(logState.pendingLogs()),
+//      logId -> {
+//        if (logState.logId() == null) {
+//          logIdCallback.accept(logId);
+//        }
+//        logState.setLogId(logId);
+//      }
+//    );
+//    logState.nextNonce();
+//    logState.clearPendingLogs();
   }
 
   public static class LogState {

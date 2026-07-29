@@ -749,24 +749,9 @@ public final class Physics extends Check {
       String expected = formatPosition(predictedOffsetX, predictedOffsetY, predictedOffsetZ);
       String actual = formatPosition(actualMotion.motionX, actualMotion.motionY, actualMotion.motionZ);
 
-//      PhysicsReport report = physicsReport == null ? new PhysicsReport(user) : physicsReport;
-//      try {
-//        ReportFileWriter.writeNew(
-//          IntavePlugin.singletonInstance().getDataFolder().toPath().resolve("physicsreports"),
-//          "intave-physicsreport",
-//          report
-//        );
-//      } catch (IOException | RuntimeException exception) {
-//        IntaveLogger.logger().error(
-//          "Unable to write physics report: "
-//            + exception.getClass().getSimpleName()
-//            + ": "
-//            + exception.getMessage()
-//        );
-//      }
+//      user.sendReport(physicsReport == null ? new PhysicsReport(user) : physicsReport);
 
 	    String message = "moved incorrectly";
-//      String details = received + " actual: " + expected;
       String details = "";
 
       details += formatDouble(distance, 6) + " / ";

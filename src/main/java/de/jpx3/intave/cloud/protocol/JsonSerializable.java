@@ -24,12 +24,12 @@ public interface JsonSerializable extends Serializable {
   default void serialize(DataOutput output) {
     StringWriter jsonString = new StringWriter();
     JsonWriter writer = new JsonWriter(new BufferedWriter(jsonString));
-    serialize(writer);
     try {
+      serialize(writer);
       writer.close();
       output.writeUTF(jsonString.toString());
     } catch (IOException e) {
-      e.printStackTrace();
+      throw new UncheckedIOException("Unable to serialize JSON packet payload", e);
     }
   }
 
@@ -37,7 +37,7 @@ public interface JsonSerializable extends Serializable {
     try {
       deserialize(new JsonReader(new StringReader(input.readUTF())));
     } catch (IOException e) {
-      e.printStackTrace();
+      throw new UncheckedIOException("Unable to deserialize JSON packet payload", e);
     }
   }
 }

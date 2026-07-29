@@ -14,19 +14,25 @@ package de.jpx3.intave.cloud.protocol;
 import com.google.gson.stream.JsonReader;
 import com.google.gson.stream.JsonToken;
 import com.google.gson.stream.JsonWriter;
+import de.jpx3.intave.IntavePlugin;
 import de.jpx3.intave.annotate.Nullable;
+import de.jpx3.intave.user.User;
+import org.bukkit.Server;
 import org.bukkit.entity.Player;
 
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
+import java.net.InetAddress;
 import java.util.UUID;
 
-public class Identity implements JsonSerializable {
+public final class Identity implements JsonSerializable {
   @Nullable
   private UUID uuid;
   @Nullable
   private String name;
+  @Nullable
+  private InetAddress netaddr;
 
   private Identity() {
   }
@@ -44,12 +50,22 @@ public class Identity implements JsonSerializable {
     this.name = name;
   }
 
+  public Identity(UUID id, String name, InetAddress netaddr) {
+    this.uuid = id;
+    this.name = name;
+    this.netaddr = netaddr;
+  }
+
   public UUID id() {
     return uuid;
   }
 
   public String name() {
     return name;
+  }
+
+  public InetAddress address() {
+    return netaddr;
   }
 
   @Override
@@ -62,9 +78,12 @@ public class Identity implements JsonSerializable {
       if (name != null) {
         writer.name("name").value(name);
       }
+      if (netaddr != null) {
+        writer.name("netaddr").value(netaddr.getHostAddress());
+      }
       writer.endObject();
     } catch (Exception e) {
-      e.printStackTrace();
+      throw new IllegalStateException("Unable to serialize cloud identity as JSON", e);
     }
   }
 
@@ -81,6 +100,12 @@ public class Identity implements JsonSerializable {
             case "name":
               name = reader.nextString();
               break;
+            case "netaddr":
+              netaddr = InetAddress.getByName(reader.nextString());
+              break;
+            default:
+              reader.skipValue();
+              break;
           }
         }
         if (reader.hasNext()) {
@@ -89,7 +114,7 @@ public class Identity implements JsonSerializable {
       }
       reader.endObject();
     } catch (Exception e) {
-      e.printStackTrace();
+      throw new IllegalStateException("Unable to deserialize cloud identity from JSON", e);
     }
   }
 
@@ -105,8 +130,12 @@ public class Identity implements JsonSerializable {
       if (name != null) {
         buffer.writeUTF(name);
       }
+      buffer.writeBoolean(netaddr != null);
+      if (netaddr != null) {
+        buffer.writeUTF(netaddr.getHostAddress());
+      }
     } catch (IOException e) {
-      e.printStackTrace();
+      throw new IllegalStateException("Unable to serialize cloud identity", e);
     }
   }
 
@@ -119,12 +148,29 @@ public class Identity implements JsonSerializable {
       if (buffer.readBoolean()) {
         name = buffer.readUTF();
       }
+      if (buffer.readBoolean()) {
+        netaddr = InetAddress.getByName(buffer.readUTF());
+      }
       if (uuid == null && name == null) {
         throw new IOException("Identity is empty");
       }
     } catch (IOException e) {
-      e.printStackTrace();
+      throw new IllegalStateException("Unable to deserialize cloud identity", e);
     }
+  }
+
+  public Player find() {
+    Server server = IntavePlugin.singletonInstance().getServer();
+    if (uuid != null) {
+      Player player = server.getPlayer(uuid);
+      if (player != null) {
+        return player;
+      }
+    }
+    if (name != null) {
+	    return server.getPlayerExact(name);
+    }
+    return null;
   }
 
   public static Identity from(String name) {
@@ -132,7 +178,18 @@ public class Identity implements JsonSerializable {
   }
 
   public static Identity from(Player player) {
-    return new Identity(player.getUniqueId(), player.getName());
+    InetAddress inetAddress = null;
+    if (IntavePlugin.singletonInstance().cloud().config().privacy().annotateINetAdds()) {
+      inetAddress = player.getAddress().getAddress();
+    }
+    return new Identity(player.getUniqueId(), player.getName(), inetAddress);
+  }
+
+  public static Identity from(User user) {
+    if (!user.hasPlayer()) {
+      throw new IllegalArgumentException("User does not have a player");
+    }
+    return from(user.player());
   }
 
   public static Identity from(UUID id) {

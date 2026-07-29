@@ -17,6 +17,8 @@ import de.jpx3.intave.block.cache.BlockCache;
 import de.jpx3.intave.block.fluid.FluidFlow;
 import de.jpx3.intave.block.fluid.Fluids;
 import de.jpx3.intave.check.movement.physics.environment.Pose;
+import de.jpx3.intave.cloud.protocol.Packet;
+import de.jpx3.intave.cloud.protocol.listener.Serverbound;
 import de.jpx3.intave.connect.customclient.CustomClientSupportConfig;
 import de.jpx3.intave.entity.size.HitboxSize;
 import de.jpx3.intave.module.actionbar.DisplayType;
@@ -41,10 +43,7 @@ import org.bukkit.entity.Player;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.function.BiFunction;
-import java.util.function.Consumer;
-import java.util.function.Function;
-import java.util.function.Predicate;
+import java.util.function.*;
 
 final class TestUser implements User {
   private final Map<Class<? extends CheckCustomMetadata>, CheckCustomMetadata> metadataPool = new ConcurrentHashMap<>();
@@ -431,6 +430,11 @@ final class TestUser implements User {
 
   @Override
   public void refreshSprintState(Consumer<Void> callback) {
+
+  }
+
+  @Override
+  public void sendCloudPacket(LongFunction<? extends Packet<Serverbound>> packetGenerator) {
 
   }
 

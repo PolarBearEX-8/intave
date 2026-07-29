@@ -8,6 +8,7 @@ prefix -> layout.prefix
 verbose -> layout.verbose
 notify -> layout.notify
 cloud-token -> cloud.token
+privacy -> cloud.privacy-mode
 
 +Placeholders
 kick-commands -> $kick$

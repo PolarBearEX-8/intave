@@ -28,6 +28,8 @@ import de.jpx3.intave.block.type.BlockTypeAccess;
 import de.jpx3.intave.check.movement.physics.environment.Pose;
 import de.jpx3.intave.cleanup.GarbageCollector;
 import de.jpx3.intave.cloud.LogTransmittor;
+import de.jpx3.intave.cloud.protocol.Packet;
+import de.jpx3.intave.cloud.protocol.listener.Serverbound;
 import de.jpx3.intave.connect.customclient.CustomClientSupportConfig;
 import de.jpx3.intave.diagnostic.ConsoleOutput;
 import de.jpx3.intave.entity.size.HitboxSize;
@@ -73,6 +75,7 @@ import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.LongFunction;
 import java.util.function.Predicate;
 
 import static de.jpx3.intave.module.feedback.FeedbackOptions.SELF_SYNCHRONIZATION;
@@ -598,6 +601,11 @@ final class PlayerUser implements User {
         }, SELF_SYNCHRONIZATION);
       }, SELF_SYNCHRONIZATION);
     }, SELF_SYNCHRONIZATION);
+  }
+
+  @Override
+  public void sendCloudPacket(LongFunction<? extends Packet<Serverbound>> packetGenerator) {
+    IntavePlugin.singletonInstance().cloud().sendPlayerPacket(this, packetGenerator);
   }
 
   @Override

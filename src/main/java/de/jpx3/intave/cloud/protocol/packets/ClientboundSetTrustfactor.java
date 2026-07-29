@@ -16,22 +16,20 @@ import com.google.gson.stream.JsonToken;
 import com.google.gson.stream.JsonWriter;
 import de.jpx3.intave.access.player.trust.TrustFactor;
 import de.jpx3.intave.cloud.protocol.Direction;
-import de.jpx3.intave.cloud.protocol.Identity;
 import de.jpx3.intave.cloud.protocol.JsonPacket;
 import de.jpx3.intave.cloud.protocol.listener.Clientbound;
-import org.bukkit.entity.Player;
 
 public final class ClientboundSetTrustfactor extends JsonPacket<Clientbound> {
-  private Identity id;
+  private long id;
   private TrustFactor trustFactor;
 
   public ClientboundSetTrustfactor() {
     super(Direction.CLIENTBOUND, "SET_TRUSTFACTOR", "1");
   }
 
-  public ClientboundSetTrustfactor(Player player, TrustFactor trustFactor) {
-    super(Direction.CLIENTBOUND, "SET_TRUSTFACTOR", "1");
-    this.id = Identity.from(player);
+  public ClientboundSetTrustfactor(long id, TrustFactor trustFactor) {
+    this();
+    this.id = id;
     this.trustFactor = trustFactor;
   }
 
@@ -39,12 +37,11 @@ public final class ClientboundSetTrustfactor extends JsonPacket<Clientbound> {
   public void serialize(JsonWriter writer) {
     try {
       writer.beginObject();
-      writer.name("id");
-      id.serialize(writer);
+      writer.name("id").value(id);
       writer.name("factor").value(trustFactor.name());
       writer.endObject();
     } catch (Exception e) {
-      e.printStackTrace();
+      throw new IllegalStateException("Unable to serialize trust-factor packet", e);
     }
   }
 
@@ -55,7 +52,7 @@ public final class ClientboundSetTrustfactor extends JsonPacket<Clientbound> {
       while (reader.peek() == JsonToken.NAME) {
         switch (reader.nextName()) {
           case "id":
-            id = Identity.from(reader);
+            id = reader.nextLong();
             break;
           case "factor":
             trustFactor = TrustFactor.valueOf(reader.nextString());
@@ -67,11 +64,11 @@ public final class ClientboundSetTrustfactor extends JsonPacket<Clientbound> {
       }
       reader.endObject();
     } catch (Exception e) {
-      e.printStackTrace();
+      throw new IllegalStateException("Unable to deserialize trust-factor packet", e);
     }
   }
 
-  public Identity id() {
+  public long id() {
     return id;
   }
 

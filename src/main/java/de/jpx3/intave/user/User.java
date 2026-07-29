@@ -12,6 +12,7 @@
 package de.jpx3.intave.user;
 
 import com.comphenix.protocol.events.PacketEvent;
+import com.google.gson.JsonObject;
 import de.jpx3.intave.access.UnsupportedFallbackOperationException;
 import de.jpx3.intave.access.player.trust.TrustFactor;
 import de.jpx3.intave.access.player.trust.TrustFactorResolver;
@@ -21,6 +22,9 @@ import de.jpx3.intave.block.fluid.FluidFlow;
 import de.jpx3.intave.check.MetaCheck;
 import de.jpx3.intave.check.MetaCheckPart;
 import de.jpx3.intave.check.movement.physics.environment.Pose;
+import de.jpx3.intave.cloud.protocol.Packet;
+import de.jpx3.intave.cloud.protocol.listener.Serverbound;
+import de.jpx3.intave.cloud.protocol.packets.ServerboundReport;
 import de.jpx3.intave.connect.customclient.CustomClientSupportConfig;
 import de.jpx3.intave.entity.size.HitboxSize;
 import de.jpx3.intave.module.actionbar.DisplayType;
@@ -33,6 +37,7 @@ import de.jpx3.intave.module.violation.placeholder.PlayerContext;
 import de.jpx3.intave.module.violation.placeholder.UserContext;
 import de.jpx3.intave.player.collider.complex.Collider;
 import de.jpx3.intave.player.collider.simple.SimpleCollider;
+import de.jpx3.intave.report.Report;
 import de.jpx3.intave.trustfactor.TrustFactorConfiguration;
 import de.jpx3.intave.user.meta.CheckCustomMetadata;
 import de.jpx3.intave.user.meta.MetadataBundle;
@@ -44,6 +49,7 @@ import org.bukkit.entity.Player;
 import java.util.UUID;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.LongFunction;
 import java.util.function.Predicate;
 
 /**
@@ -583,4 +589,13 @@ public interface User {
   default void refreshSprintState() {
     refreshSprintState(null);
   }
+
+  default void sendReport(Report report) {
+    // materialize on this thread
+    JsonObject json = report.toJson();
+    // transmission on other threads
+    sendCloudPacket(value -> new ServerboundReport(value, json));
+  }
+
+  void sendCloudPacket(LongFunction<? extends Packet<Serverbound>> packetGenerator);
 }

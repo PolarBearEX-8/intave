@@ -12,7 +12,17 @@
 package de.jpx3.intave.cloud.protocol.listener;
 
 import de.jpx3.intave.cloud.protocol.Packet;
-import de.jpx3.intave.cloud.protocol.packets.*;
+import de.jpx3.intave.cloud.protocol.packets.ClientboundCombatModifier;
+import de.jpx3.intave.cloud.protocol.packets.ClientboundSetTrustfactor;
+import de.jpx3.intave.cloud.protocol.packets.ClientboundViolation;
+import de.jpx3.intave.cloud.protocol.packets.base.ClientboundConfirmAttestations;
+import de.jpx3.intave.cloud.protocol.packets.base.ClientboundDisconnect;
+import de.jpx3.intave.cloud.protocol.packets.base.ClientboundHello;
+import de.jpx3.intave.cloud.protocol.packets.base.ClientboundKeepAlive;
+import de.jpx3.intave.cloud.protocol.packets.player.ClientboundClarifyUnknownPlayerId;
+import de.jpx3.intave.cloud.protocol.packets.player.ClientboundSendMessage;
+import de.jpx3.intave.cloud.protocol.packets.player.ClientboundSetPlayerId;
+import de.jpx3.intave.cloud.protocol.packets.sampling.ClientboundSetSamplingState;
 
 public interface Clientbound extends PacketListener {
 
@@ -24,38 +34,40 @@ public interface Clientbound extends PacketListener {
       onCloseConnection((ClientboundDisconnect) packet);
     } else if (packet instanceof ClientboundCombatModifier) {
       onCombatModifier((ClientboundCombatModifier) packet);
-    } else if (packet instanceof ClientboundDownloadStorage) {
-      onDownloadStorage((ClientboundDownloadStorage) packet);
     } else if (packet instanceof ClientboundKeepAlive) {
       onKeepAlive((ClientboundKeepAlive) packet);
     } else if (packet instanceof ClientboundSetTrustfactor) {
       onSetTrustfactor((ClientboundSetTrustfactor) packet);
     } else if (packet instanceof ClientboundViolation) {
       onViolation((ClientboundViolation) packet);
-    } else if (packet instanceof ClientboundShardsPacket) {
-      onShardsPacket((ClientboundShardsPacket) packet);
-    } else if (packet instanceof ClientboundSampleTransmissionAcknowledgement) {
-      onSampleTransmissionAcknowledgement((ClientboundSampleTransmissionAcknowledgement) packet);
-    } else if (packet instanceof ClientboundLogReceive) {
-      onLogReceive((ClientboundLogReceive) packet);
-    } else if (packet instanceof ClientboundCommand) {
-      onCommand((ClientboundCommand) packet);
-    } else if (packet instanceof ClientboundInquiryResponse) {
-      onInquiryResponse((ClientboundInquiryResponse) packet);
+    } else if (packet instanceof ClientboundSetSamplingState) {
+      onChangeSampling((ClientboundSetSamplingState) packet);
+    } else if (packet instanceof ClientboundConfirmAttestations) {
+      onConfirmAttestations((ClientboundConfirmAttestations) packet);
+    } else if (packet instanceof ClientboundClarifyUnknownPlayerId) {
+      onClarifyUnknownPlayerId((ClientboundClarifyUnknownPlayerId) packet);
+    } else if (packet instanceof ClientboundSetPlayerId) {
+      onSetPlayerId((ClientboundSetPlayerId) packet);
+    } else if (packet instanceof ClientboundSendMessage) {
+      onSendMessage((ClientboundSendMessage) packet);
     } else {
       onUncaught(packet);
     }
   }
 
-  default void onSampleTransmissionAcknowledgement(ClientboundSampleTransmissionAcknowledgement packet) {
+  default void onConfirmAttestations(ClientboundConfirmAttestations packet) {
+    onUncaught(packet);
+  }
+
+  default void onClarifyUnknownPlayerId(ClientboundClarifyUnknownPlayerId packet) {
+    onUncaught(packet);
+  }
+
+  default void onSetPlayerId(ClientboundSetPlayerId packet) {
     onUncaught(packet);
   }
 
   default void onClientHello(ClientboundHello packet) {
-    onUncaught(packet);
-  }
-
-  default void onCommand(ClientboundCommand packet) {
     onUncaught(packet);
   }
 
@@ -67,10 +79,6 @@ public interface Clientbound extends PacketListener {
     onUncaught(packet);
   }
 
-  default void onDownloadStorage(ClientboundDownloadStorage packet) {
-    onUncaught(packet);
-  }
-
   default void onKeepAlive(ClientboundKeepAlive packet) {
     onUncaught(packet);
   }
@@ -79,19 +87,15 @@ public interface Clientbound extends PacketListener {
     onUncaught(packet);
   }
 
-  default void onShardsPacket(ClientboundShardsPacket packet) {
-    onUncaught(packet);
-  }
-
   default void onViolation(ClientboundViolation packet) {
     onUncaught(packet);
   }
 
-  default void onLogReceive(ClientboundLogReceive packet) {
+  default void onChangeSampling(ClientboundSetSamplingState packet) {
     onUncaught(packet);
   }
 
-  default void onInquiryResponse(ClientboundInquiryResponse packet) {
+  default void onSendMessage(ClientboundSendMessage packet) {
     onUncaught(packet);
   }
 

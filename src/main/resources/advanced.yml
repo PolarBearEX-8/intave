@@ -92,21 +92,21 @@ check:
       thresholds:
         20:
           - "intave internals storelog {player} {check} {vl}"
-          - "intave internals sendnotify &e{player}&7 is attacking suspiciously #1"
+          - "intave internals sendnotify &c{player}&7/{trust-color}&7 is acting computer-like #1"
 
         40:
-          - "intave internals sendnotify &e{player}&7 is attacking suspiciously #2"
+          - "intave internals sendnotify &c{player}&7/{trust-color}&7 is acting computer-like #2"
 
         50:
           - "intave internals storelog {player} {check} {vl}"
-          - "intave internals sendnotify &c{player}&7/{trust-color}&7 has been kicked for attacking suspiciously (on-premise classic heuristics)"
+          - "intave internals sendnotify &c{player}&7/{trust-color}&7 has been kicked for acting computer-like (on-premise classic heuristics)"
           - $kick$
 
     cloud:
       thresholds:
         50:
           - "intave internals storelog {player} {check} {vl}"
-          - "intave internals sendnotify &c{player}&7/{trust-color}&7 has been removed for attacking suspiciously (cloud heuristics)"
+          - "intave internals sendnotify &c{player}&7/{trust-color}&7 has been removed for acting computer-like (cloud heuristics)"
           - $ban$
 
   attackraytrace:
@@ -213,6 +213,9 @@ cloud:
 
   # Cloud token
   token: "ct_EXAMPLE-TOKEN"
+
+  # Cloud privacy control
+  privacy-mode: BEST_DETECTION
 
   features:
     # Should Intave use the cloud to store metadata?

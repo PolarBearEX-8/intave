@@ -14,10 +14,7 @@ package de.jpx3.intave.cloud.protocol;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 public final class ProtocolSpecification {
   private final Map<Direction, Set<String>> packetsNames = Maps.newEnumMap(Direction.class);
@@ -43,6 +40,19 @@ public final class ProtocolSpecification {
   }
 
   public void overridePacketIds(Direction direction, List<String> packetNames) {
+    if (packetNames.size() > 0xFF) {
+      throw new IllegalArgumentException(
+        "Cloud negotiated " + packetNames.size() + " "
+          + direction.name().toLowerCase()
+          + " packet ids; the protocol supports at most 255"
+      );
+    }
+    if (new HashSet<>(packetNames).size() != packetNames.size()) {
+      throw new IllegalArgumentException(
+        "Cloud negotiated duplicate " + direction.name().toLowerCase()
+          + " packet names: " + packetNames
+      );
+    }
     Map<Integer, String> idToName = new HashMap<>();
     Map<String, Integer> nameToId = new HashMap<>();
     for (int i = 0; i < packetNames.size(); i++) {
@@ -67,6 +77,18 @@ public final class ProtocolSpecification {
   }
 
   public int packetId(Direction direction, String name) {
-    return packetNamesToId.get(direction).get(name);
+    Integer integer = packetNamesToId.get(direction).get(name);
+    if (integer == null) {
+      throw new IllegalStateException("Packet " + name + " has no assigned id for direction " + direction);
+    }
+    return integer;
   }
+
+	public String packetName(Direction receiving, int packetId) {
+    String name = packetIdsToName.get(receiving).get(packetId);
+    if (name == null) {
+      throw new IllegalStateException("Packet id " + packetId + " has no assigned name for direction " + receiving);
+    }
+    return name;
+	}
 }

@@ -15,6 +15,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonNull;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
+import de.jpx3.intave.IntavePlugin;
 import de.jpx3.intave.block.cache.BlockCache;
 import de.jpx3.intave.check.movement.physics.config.MovementConfiguration;
 import de.jpx3.intave.check.movement.physics.environment.MoveMetric;
@@ -63,6 +64,8 @@ public final class PhysicsReport implements Report {
 
     JsonObject report = new JsonObject();
     report.addProperty("type", "physics");
+    report.addProperty("version", "1.0.0");
+    report.addProperty("intaveVersion", IntavePlugin.fullVersion());
     report.addProperty("createdAt", createdAt);
     report.addProperty("userId", suspect.id().toString());
     report.add("movement", movementToJson(movement, metadata.violationLevel(), surroundingBlocks));

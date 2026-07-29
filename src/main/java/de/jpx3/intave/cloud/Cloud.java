@@ -12,70 +12,50 @@
 package de.jpx3.intave.cloud;
 
 import de.jpx3.intave.IntaveAccessor;
-import de.jpx3.intave.IntaveControl;
 import de.jpx3.intave.IntaveLogger;
 import de.jpx3.intave.IntavePlugin;
 import de.jpx3.intave.access.IntaveAccess;
-import de.jpx3.intave.access.player.trust.DefaultForwardingPermissionTrustFactorResolver;
-import de.jpx3.intave.access.player.trust.SelectiveTrustfactorResolver;
-import de.jpx3.intave.access.player.trust.TrustFactor;
-import de.jpx3.intave.access.player.trust.TrustFactorResolver;
 import de.jpx3.intave.annotate.HighOrderService;
 import de.jpx3.intave.cleanup.ShutdownTasks;
-import de.jpx3.intave.cloud.protocol.Identity;
+import de.jpx3.intave.cloud.protocol.CloudToken;
 import de.jpx3.intave.cloud.protocol.Packet;
-import de.jpx3.intave.cloud.protocol.Shard;
-import de.jpx3.intave.cloud.protocol.Token;
 import de.jpx3.intave.cloud.protocol.listener.Serverbound;
-import de.jpx3.intave.cloud.protocol.packets.*;
-import de.jpx3.intave.cloud.protocol.packets.ServerboundPlayerPlayStateChange.PlayState;
+import de.jpx3.intave.cloud.protocol.packets.sampling.ServerboundPassSample;
 import de.jpx3.intave.cloud.request.CloudStorageGateaway;
-import de.jpx3.intave.cloud.request.CloudTrustfactorResolver;
-import de.jpx3.intave.cloud.request.Request;
 import de.jpx3.intave.executor.BackgroundExecutors;
 import de.jpx3.intave.executor.Synchronizer;
 import de.jpx3.intave.executor.TaskTracker;
-import de.jpx3.intave.module.Modules;
-import de.jpx3.intave.module.nayoro.Classifier;
-import de.jpx3.intave.module.nayoro.Nayoro;
 import de.jpx3.intave.resource.Resource;
 import de.jpx3.intave.resource.Resources;
-import de.jpx3.intave.trustfactor.TrustFactorService;
+import de.jpx3.intave.user.User;
 import de.jpx3.intave.user.UserRepository;
 import org.bukkit.Bukkit;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.entity.Player;
 
 import java.nio.ByteBuffer;
-import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
-import java.util.function.Consumer;
-import java.util.stream.Collectors;
+import java.util.function.LongFunction;
 
 @HighOrderService
 public final class Cloud {
 	// later
 	private static final Resource INITIAL_SHARED_KEY_RESOURCE = Resources.localServiceCacheResource("cloud-initial.dat", "cloud-initial", TimeUnit.DAYS.toMillis(30));
 	private static final Resource SHARD_STORAGE_RESOURCE = Resources.fileCache("shardStorage");
-	private static final ShardCache shardCache = SHARD_STORAGE_RESOURCE.collectLines(ShardCache.resourceCollector());
 
-	private static final Shard MASTER_SHARD = new Shard("master", "main.shard.intave.cloud", 2024, new Token(
-		Base64.getUrlDecoder().decode("AAABABKT-HudAj2RnjKdCCcBTs3wWn5fVlOMSaexNfQjlDYjq8TK016swow9U36oYyz53ufgYv6PQPZo_2r5oQep04EedDyqUR3SrSyRXGBTEGcZRO79AOF7_7yF_iZtSliZhbWnJK7PDoIS3QzY6LW35A9G-IPlNM5GkHqR2ysJ8cP2635r9fVc0xU0iLKDXs6MPZdAPVpAVzdCnbezAyY3dQxSzufwWhANkrGsel-qxfZQSh7QVYsCt50-B7u8w2mwO9LbNvDK1zMyaJOlwrD6ztxEYwjmWv8y4LQbxEEfPaiTVB8X6tepDhLrmSO3Ql7QVsWyJS_Iwt7VSNYPaN56ptCF3FoKJw-d7ZGsaEbSUXk8AAAAUBeKwtkFQOkOJulQ7hn4ZtfwgFitc5nckFwfnXFGsYMgYdQyI7Yr1QyZbh8ZtzxAd-w0hX65ch9RnghmXixN6AzhHjrCzOqkD1N1swuIUvDhAAAAIL1zcMGcxnBgDvC-7hcFkDIm8WxwaWSnu2LfU4msGtES"),
-		System.currentTimeMillis()
-	));
+//	private static final ShardConnection MASTER_SHARD_CONNECTION = new ShardConnection("master", "main.shard.intave.cloud", 2024, new Token(
+//		Base64.getUrlDecoder().decode("AAABABKT-HudAj2RnjKdCCcBTs3wWn5fVlOMSaexNfQjlDYjq8TK016swow9U36oYyz53ufgYv6PQPZo_2r5oQep04EedDyqUR3SrSyRXGBTEGcZRO79AOF7_7yF_iZtSliZhbWnJK7PDoIS3QzY6LW35A9G-IPlNM5GkHqR2ysJ8cP2635r9fVc0xU0iLKDXs6MPZdAPVpAVzdCnbezAyY3dQxSzufwWhANkrGsel-qxfZQSh7QVYsCt50-B7u8w2mwO9LbNvDK1zMyaJOlwrD6ztxEYwjmWv8y4LQbxEEfPaiTVB8X6tepDhLrmSO3Ql7QVsWyJS_Iwt7VSNYPaN56ptCF3FoKJw-d7ZGsaEbSUXk8AAAAUBeKwtkFQOkOJulQ7hn4ZtfwgFitc5nckFwfnXFGsYMgYdQyI7Yr1QyZbh8ZtzxAd-w0hX65ch9RnghmXixN6AzhHjrCzOqkD1N1swuIUvDhAAAAIL1zcMGcxnBgDvC-7hcFkDIm8WxwaWSnu2LfU4msGtES"),
+//		System.currentTimeMillis()
+//	));
 
-	private final Map<Shard, Session> sessions = new HashMap<>();
-	private final Map<Shard, Integer> reconnectAttempts = new ConcurrentHashMap<>();
-	private final Map<UUID, Request<TrustFactor>> trustfactorRequests = new HashMap<>();
-	private final Map<UUID, Request<ByteBuffer>> storageRequests = new HashMap<>();
-	private final Map<UUID, Request<Classifier>> sampleTransmissionRequests = new HashMap<>();
-	private final Map<UUID, Request<Map<String, String>>> statusInquiryRequests = new HashMap<>();
-	private final Map<Integer, Request<String>> uploadLogRequests = new HashMap<>();
+	private volatile Session session;
+	private volatile int reconnectAttempts = 0;
+
 	private CloudConfig cloudConfig;
 	private int taskId;
-	private boolean wasConnected = false;
 	private boolean lastAttemptFailed = false;
+	private volatile boolean shuttingDown;
 
 	public void init() {
 		setupKeepAliveTick();
@@ -85,9 +65,14 @@ public final class Cloud {
 		cloudConfig = CloudConfig.from(config);
 	}
 
+	public CloudConfig config() {
+		return cloudConfig;
+	}
+
 	public void connectMasterShard() {
+		shuttingDown = false;
 		if (cloudConfig.isEnabled()) {
-			openSession(MASTER_SHARD);
+			openSession(cloudConfig.connectionSettings());
 			ShutdownTasks.add(this::disable);
 		} else {
 			IntaveLogger.logger().info("Cloud is disabled");
@@ -95,86 +80,87 @@ public final class Cloud {
 	}
 
 	private void disable() {
-		sessions.values().forEach(Session::close);
+		shuttingDown = true;
+		Session activeSession = session;
+		if (activeSession != null) {
+			activeSession.close();
+		}
 		Bukkit.getScheduler().cancelTask(taskId);
 		TaskTracker.stopped(taskId);
-		if (shardCache.wasModified() && !IntaveControl.CLOUD_LOCALHOST_MASTER_SHARD) {
-			SHARD_STORAGE_RESOURCE.write(shardCache.compiledLines());
-		}
 	}
 
-	public void openSession(Shard shard) {
-		if (shard == null) {
+	public void openSession(CloudToken cloudToken) {
+		if (shuttingDown) {
+			return;
+		}
+		if (cloudToken == null) {
 			throw new IllegalArgumentException("Shard cannot be null");
 		}
-		Session session = new Session(shard, this);
+		Session session = new Session(cloudToken);
 		session.tryToConnect(success -> {
 			if (success) {
+				if (shuttingDown) {
+					session.close();
+					return;
+				}
+				this.session = session;
 				session.subscribeToStarted(unused -> {
-					reconnectAttempts.remove(shard);
+					reconnectAttempts = 0;
 					if (lastAttemptFailed) {
-						IntaveLogger.logger().info("Successfully reconnected to " + shard);
+						IntaveLogger.logger().info("Successfully reconnected to " + cloudToken);
 						lastAttemptFailed = false;
-						for (Player onlinePlayer : Bukkit.getOnlinePlayers()) {
-							IntavePlugin.singletonInstance().logTransmittor()
-								.addPlayerLog(onlinePlayer, "--- CLOUD RECONNECTED ---");
-						}
 					}
 					setTrustAndStorage();
-					askForGlobalSampleTransmission();
-					wasConnected = true;
+					Synchronizer.synchronize(() ->
+						Bukkit.getOnlinePlayers().forEach(this::playerLogin)
+					);
 				});
 			} else {
+				if (shuttingDown) {
+					if (this.session == session) {
+						this.session = null;
+					}
+					return;
+				}
+				if (this.session != null && this.session != session) {
+					return;
+				}
+				boolean reconnectingClosedSession = this.session == session;
 				lastAttemptFailed = true;
 				// called on failure or connection closure
-				int attempts = reconnectAttempts.getOrDefault(shard, 0);
+				int attempts = reconnectAttempts;
 				int retryingIn = (int) (Math.pow(2, attempts + 1.75) * 2) + 10;
-
-				// add random 25% jitter
 				retryingIn += (int) (retryingIn * (Math.random() * 0.25));
 
-				if (wasConnected) {
-					try {
-						Nayoro nayoro = Modules.nayoro();
-						int delay = 0;
-						for (Player onlinePlayer : Bukkit.getOnlinePlayers()) {
-							IntavePlugin.singletonInstance().logTransmittor().addPlayerLog(onlinePlayer, "--- CLOUD LOST ---");
-							nayoro.disableRecordingFor(UserRepository.userOf(onlinePlayer));
-						}
-					} catch (Exception exception) {
-						// just return
-						return;
-					}
-					wasConnected = false;
-				}
-
-				IntaveLogger.logger().warning(
-					String.format("Cloud reconnect unsuccessful, retrying in %d seconds, attempt %d/20", retryingIn, attempts + 1)
-				);
+				String retryReason = reconnectingClosedSession
+					? "Cloud connection closed"
+					: "Cloud reconnect unsuccessful";
+				IntaveLogger.logger().warning(String.format(
+					"%s, retrying in %d seconds, attempt %d/20",
+					retryReason,
+					retryingIn,
+					attempts + 1
+				));
 				if (attempts < 20) {
-					reconnectAttempts.put(shard, attempts + 1);
-					Synchronizer.synchronizeDelayed(() -> {
-						BackgroundExecutors.executeWhenever(() -> openSession(shard));
-					}, 20 * retryingIn);
+					reconnectAttempts = attempts + 1;
+					Synchronizer.synchronizeDelayed(() ->
+						BackgroundExecutors.executeWhenever(() -> openSession(cloudToken)), 20 * retryingIn);
 				} else {
-					IntaveLogger.logger().warning("Unable to connect to " + shard + " after 20 attempts");
+					IntaveLogger.logger().warning("Unable to connect to " + cloudToken + " after 20 attempts");
 					IntaveLogger.logger().warning("We will try to reconnect every 12 hours now");
-					Synchronizer.synchronizeDelayed(() -> {
-						BackgroundExecutors.executeWhenever(() -> openSession(shard));
-					}, 20 * 60 * 60 * 12);
+					Synchronizer.synchronizeDelayed(() ->
+						BackgroundExecutors.executeWhenever(() -> openSession(cloudToken)), 20 * 60 * 60 * 12);
 				}
-				sessions.remove(shard);
+				if (this.session == session) {
+					this.session = null;
+				}
 			}
 		});
-		sessions.put(shard, session);
 	}
 
 	private void setupKeepAliveTick() {
 		taskId = Bukkit.getScheduler().scheduleAsyncRepeatingTask(
-			IntavePlugin.singletonInstance(), () -> {
-				keepAliveTick();
-				removeUnansweredRequests();
-			}, 20 * 10, 20 * 30
+			IntavePlugin.singletonInstance(), this::heartbeat, 20 * 10, 20 * 60
 		);
 		TaskTracker.begun(taskId);
 	}
@@ -182,268 +168,74 @@ public final class Cloud {
 	private void setTrustAndStorage() {
 		IntaveAccess access = IntaveAccessor.unsafeAccess();
 		CloudConfig.CloudFeatures features = cloudConfig.features();
-		if (features.cloudTrustfactorEnabled()) {
-			TrustFactorService trustFactorService = IntavePlugin.singletonInstance().trustFactorService();
-			TrustFactorResolver custom = trustFactorService.customTrustFactorResolver();
-			TrustFactorResolver newResolver = new DefaultForwardingPermissionTrustFactorResolver(new CloudTrustfactorResolver(this));
-			if (custom != null) {
-				newResolver = new SelectiveTrustfactorResolver(custom, newResolver);
-			}
-			trustFactorService.setDirectTrustFactorResolver(newResolver);
-		}
 		if (features.cloudStorageEnabled()) {
-			access.setStorageGateway(new CloudStorageGateaway(this));
+			access.setStorageGateway(new CloudStorageGateaway());
 		}
-	}
-
-	private void askForGlobalSampleTransmission() {
-		try {
-			int delay = 0;
-			for (Player onlinePlayer : Bukkit.getOnlinePlayers()) {
-				Nayoro nayoro = Modules.nayoro();
-				if (!nayoro.recordingActiveFor(UserRepository.userOf(onlinePlayer))) {
-					Synchronizer.synchronizeDelayed(() -> {
-						nayoro.askForSampleTransmission(onlinePlayer);
-					}, delay);
-					delay++;
-				}
-			}
-		} catch (Exception ignored) {
-		}
-	}
-
-	public void setMasterShard(
-		String host, int port, byte[] tokenBytes, long tokenValidUntil
-	) {
-		shardCache.addShard(new Shard("master", host, port, new Token(tokenBytes, tokenValidUntil)));
-	}
-
-	public boolean knowsMasterShard() {
-		return shardCache.hasMasterShard() &&
-			shardCache.masterCloudToken().isStillValidIn(5, TimeUnit.MINUTES);
 	}
 
 	public long sentBytes() {
-		return sessions.values().stream().mapToLong(Session::sentBytes).sum();
+		Session target = session;
+		return target != null ? target.sentBytes() : 0;
 	}
 
 	public long receivedBytes() {
-		return sessions.values().stream().mapToLong(Session::receivedBytes).sum();
+		Session target = session;
+		return target != null ? target.receivedBytes() : 0;
 	}
 
-	public Map<Shard, Long> sentBytesPerShard() {
-		Map<Shard, Long> sent = new HashMap<>();
-		for (Shard shard : sessions.keySet()) {
-			sent.put(shard, sessions.get(shard).sentBytes());
+	public boolean isConnected() {
+		Session target = session;
+		return target != null && target.active();
+	}
+
+	public void sendPlayerPacket(
+		User user, LongFunction<? extends Packet<Serverbound>> generator
+	) {
+		if (!user.hasPlayer()) {
+			return;
 		}
-		return sent;
-	}
-
-	public Map<Shard, Long> receivedBytesPerShard() {
-		Map<Shard, Long> received = new HashMap<>();
-		for (Shard shard : sessions.keySet()) {
-			received.put(shard, sessions.get(shard).receivedBytes());
-		}
-		return received;
-	}
-
-	public Map<Shard, Boolean> shardConnections() {
-		Map<Shard, Boolean> connections = new HashMap<>();
-		for (Shard shard : sessions.keySet()) {
-			connections.put(shard, sessions.get(shard).active());
-		}
-		return connections;
-	}
-
-	private void sendPacket(Packet<Serverbound> packet) {
 		BackgroundExecutors.execute(() -> {
-			boolean sent = false;
-			for (Session session : sessions.values()) {
-				if (session.canSend(packet)) {
-					session.send(packet);
-					sent = true;
-					if (IntaveControl.AUTHENTICATION_DEBUG_MODE) {
-						IntaveLogger.logger().info("Sent packet " + packet.name() + " to " + session.shard());
-					}
-					break;
-				}
-			}
-			boolean cloudWasDeactivated = !cloudConfig.isEnabled();
-			if (!sent && !cloudWasDeactivated) {
-				IntaveLogger.logger().error("Unable to send packet " + packet.name() + " to any shard");
+			Session target = session;
+			if (target != null) {
+				target.sendUserPacket(user, generator);
 			}
 		});
 	}
 
-	private void keepAliveTick() {
-		for (Session session : sessions.values()) {
-			session.keepAliveTick();
+	public void playerLogin(Player player) {
+		User user = UserRepository.userOf(player);
+		Session target = session;
+		if (target != null) {
+			target.announceUser(user);
 		}
 	}
 
-	private void removeUnansweredRequests() {
-		long now = System.currentTimeMillis();
-		long timeout = 1000 * 60 * 5;
-		sampleTransmissionRequests.entrySet().removeIf(entry -> now - entry.getValue().lastUpdate() > timeout);
-		statusInquiryRequests.entrySet().removeIf(entry -> now - entry.getValue().lastUpdate() > timeout && entry.getValue().publish(new HashMap<>()));
-		trustfactorRequests.entrySet().removeIf(entry -> now - entry.getValue().lastUpdate() > timeout);
-		uploadLogRequests.entrySet().removeIf(entry -> now - entry.getValue().lastUpdate() > timeout);
-		storageRequests.entrySet().removeIf(entry -> now - entry.getValue().lastUpdate() > timeout);
+	public void playerLogout(Player player) {
+		User user = UserRepository.userOf(player);
+		Session target = session;
+		if (target != null) {
+			target.sendUserLogout(user);
+		}
 	}
 
-	public void requestSampleTransmission(Player player, Consumer<Classifier> callbackIfAccepted) {
-		if (!cloudConfig.isEnabled() || !cloudConfig.features().sampleTransmission()) {
+	private void heartbeat() {
+		Session target = session;
+		if (target == null || !target.active()) {
 			return;
 		}
-		Nayoro nayoro = Modules.nayoro();
-		if (nayoro.recordingActiveFor(UserRepository.userOf(player))) {
-			return;
-		}
-		UUID id = player.getUniqueId();
-		Request<Classifier> request = sampleTransmissionRequests.computeIfAbsent(id, k -> new Request<>());
-		request.subscribe(callbackIfAccepted);
-		sendPacket(new ServerboundSampleTransmissionRequest(Identity.from(player)));
+		target.keepAliveTick();
+		target.retryMissedAttestations();
 	}
 
-	public void requestSampleTransmission(Player player, Classifier classifier, String cheatOrScenario, String version, Consumer<Classifier> callbackIfAccepted) {
-		if (!cloudConfig.isEnabled() || !cloudConfig.features().sampleTransmission()) {
-			return;
-		}
-		UUID id = player.getUniqueId();
-		Request<Classifier> request = sampleTransmissionRequests.computeIfAbsent(id, k -> new Request<>());
-		request.subscribe(callbackIfAccepted);
-		sendPacket(new ServerboundSampleTransmissionRequest(Identity.from(player), classifier, cheatOrScenario, version));
-	}
-
-	public void noteEndOfSampleTransmission(Player player) {
-		if (!cloudConfig.isEnabled() || !cloudConfig.features().sampleTransmission()) {
-			return;
-		}
-		sendPacket(new ServerboundSampleCompleted(Identity.from(player)));
-	}
-
-	public void serveSampleTransmissionRequest(Identity identity, boolean allowed, Classifier classifier) {
-		if (!cloudConfig.isEnabled() || !cloudConfig.features().sampleTransmission()) {
-			return;
-		}
-		Request<Classifier> request = sampleTransmissionRequests.remove(identity.id());
-		if (request != null && allowed) {
-			request.publish(classifier);
-		}
-	}
-
-	public void uploadSample(Player player, ByteBuffer buffer) {
-		sendPacket(new ServerboundPassNayoro(Identity.from(player), buffer));
-	}
-
-	public void uploadPlayerLogs(Player player, int nonce, List<String> logs, Consumer<String> callback) {
-		Request<String> request = uploadLogRequests.computeIfAbsent(nonce, k -> new Request<>());
-		request.subscribe(callback);
-		sendPacket(new ServerboundUploadLogs(Identity.from(player), nonce, logs));
-	}
-
-	public void serveUploadPlayerLogs(Identity identity, int nonce, String logId) {
-		Request<String> request = uploadLogRequests.remove(nonce);
-		if (request != null) {
-			request.publish(logId);
-		}
-	}
-
-	public void trustfactorRequest(Player player, Consumer<TrustFactor> callback) {
-		if (!available()) {
-			return;
-		}
-		UUID key = player.getUniqueId();
-		Request<TrustFactor> request = trustfactorRequests.computeIfAbsent(key, k -> new Request<>());
-		request.subscribe(callback);
-		sendPacket(new ServerboundRequestTrustfactor(Identity.from(player)));
-	}
-
-	public void serveTrustfactorRequest(Identity identity, TrustFactor trustFactor) {
-		Request<TrustFactor> request = trustfactorRequests.remove(identity.id());
-		if (request != null) {
-			request.publish(trustFactor);
-		}
-	}
-
-	public void storageRequest(UUID id, Consumer<ByteBuffer> callback) {
-		if (!available()) {
-			return;
-		}
-		Request<ByteBuffer> request = storageRequests.computeIfAbsent(id, k -> new Request<>());
-		request.subscribe(callback);
-		sendPacket(new ServerboundRequestStorage(Identity.from(id)));
-	}
-
-	public void serveStorageRequest(Identity identity, ByteBuffer buffer) {
-		Request<ByteBuffer> request = storageRequests.remove(identity.id());
-		if (request != null) {
-			request.publish(buffer);
-		}
-	}
-
-	public void saveStorage(UUID id, ByteBuffer buffer) {
-		sendPacket(new ServerboundUploadStorage(Identity.from(id), buffer));
-	}
-
-	public void generalStatusInquiry(
-		Consumer<Map<String, String>> callback
+	public void uploadSample(
+		Player player, ByteBuffer buffer,
+		UUID transmissionId, int sampleSubIndex
 	) {
-		if (!available()) {
-			callback.accept(new HashMap<>());
-			return;
-		}
-		if (statusInquiryRequests.size() > 100) {
-			callback.accept(new HashMap<>());
-			return;
-		}
-		UUID id = UUID.randomUUID();
-		Request<Map<String, String>> request = statusInquiryRequests.computeIfAbsent(id, k -> new Request<>());
-		request.subscribe(callback);
-		sendPacket(new ServerboundStatusInquiry(id, ServerboundStatusInquiry.Type.GENERAL, null));
-	}
-
-	public void playerStatusInquiry(
-		Player player, Consumer<Map<String, String>> callback
-	) {
-		if (!available()) {
-			callback.accept(new HashMap<>());
-			return;
-		}
-		if (statusInquiryRequests.size() > 100) {
-			callback.accept(new HashMap<>());
-			return;
-		}
-		UUID id = player.getUniqueId();// hehe
-		Request<Map<String, String>> request = statusInquiryRequests.computeIfAbsent(id, k -> new Request<>());
-		request.subscribe(callback);
-		sendPacket(new ServerboundStatusInquiry(id, ServerboundStatusInquiry.Type.PLAYER, Identity.from(player)));
-	}
-
-	public void serveInquiryResponse(UUID requestId, Map<String, String> status) {
-		Request<Map<String, String>> request = statusInquiryRequests.remove(requestId);
-		if (request != null) {
-			request.publish(status);
-		}
-	}
-
-	public void playerStateChange(
-		Player player, UUID gameId, boolean online, List<UUID> interacted
-	) {
-		if (!available()) {
-			return;
-		}
-		sendPacket(ServerboundPlayerPlayStateChange.from(
-			Identity.from(player), online ? PlayState.JOIN : PlayState.LEAVE, gameId,
-			interacted.stream().map(Identity::from).collect(Collectors.toList())
-		));
+		User user = UserRepository.userOf(player);
+		sendPlayerPacket(user, id -> new ServerboundPassSample(id, transmissionId, sampleSubIndex, buffer));
 	}
 
 	public boolean isEnabled() {
 		return cloudConfig.isEnabled();
-	}
-
-	public boolean available() {
-		return sessions.values().stream().anyMatch(Session::active);
 	}
 }

@@ -12,17 +12,14 @@
 package de.jpx3.intave.cloud.protocol.listener;
 
 import de.jpx3.intave.cloud.protocol.Packet;
-import de.jpx3.intave.cloud.protocol.packets.ServerboundConfirmEncryption;
-import de.jpx3.intave.cloud.protocol.packets.ServerboundHello;
-import de.jpx3.intave.cloud.protocol.packets.ServerboundRequestStorage;
+import de.jpx3.intave.cloud.protocol.packets.base.ServerboundConfirmEncryption;
+import de.jpx3.intave.cloud.protocol.packets.base.ServerboundHello;
 
 public interface Serverbound extends PacketListener {
   @Override
   default void onUncaught(Packet<?> packet) {
     if (packet instanceof ServerboundConfirmEncryption) {
       onConfirmEncryption((ServerboundConfirmEncryption)packet);
-    } else if (packet instanceof ServerboundRequestStorage) {
-      onRequestStorage((ServerboundRequestStorage)packet);
     } else if (packet instanceof ServerboundHello) {
       onHello((ServerboundHello)packet);
     }
@@ -33,10 +30,6 @@ public interface Serverbound extends PacketListener {
   }
 
   default void onConfirmEncryption(ServerboundConfirmEncryption packet) {
-
-  }
-
-  default void onRequestStorage(ServerboundRequestStorage packet) {
 
   }
 }

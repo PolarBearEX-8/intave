@@ -13,17 +13,22 @@ package de.jpx3.intave.cloud.protocol.pipeline;
 
 import de.jpx3.intave.IntaveLogger;
 import de.jpx3.intave.cloud.Session;
-import de.jpx3.intave.cloud.protocol.*;
+import de.jpx3.intave.cloud.protocol.CloudToken;
+import de.jpx3.intave.cloud.protocol.Packet;
+import de.jpx3.intave.cloud.protocol.PacketRegistry;
+import de.jpx3.intave.cloud.protocol.ProtocolSpecification;
 import de.jpx3.intave.cloud.protocol.listener.Clientbound;
-import de.jpx3.intave.cloud.protocol.packets.ClientboundHello;
-import de.jpx3.intave.cloud.protocol.packets.ServerboundConfirmEncryption;
-import de.jpx3.intave.cloud.protocol.packets.ServerboundHello;
+import de.jpx3.intave.cloud.protocol.packets.base.ClientboundDisconnect;
+import de.jpx3.intave.cloud.protocol.packets.base.ClientboundHello;
+import de.jpx3.intave.cloud.protocol.packets.base.ServerboundConfirmEncryption;
+import de.jpx3.intave.cloud.protocol.packets.base.ServerboundHello;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 
 import javax.crypto.Cipher;
 import javax.crypto.KeyGenerator;
 import javax.crypto.spec.IvParameterSpec;
+import java.nio.charset.StandardCharsets;
 import java.security.Key;
 import java.security.NoSuchAlgorithmException;
 import java.security.Security;
@@ -53,10 +58,10 @@ public final class HandshakeReceiver extends ChannelInboundHandlerAdapter implem
 
   @Override
   public void channelActive(ChannelHandlerContext ctx) {
-    Shard shard = session.shard();
-    ArrayList<String> hmacs = new ArrayList<>(Security.getAlgorithms("Mac2"));
+    CloudToken cloudToken = session.shard();
+    ArrayList<String> hmacs = new ArrayList<>(Security.getAlgorithms("Mac"));
     ServerboundHello serverHelloPacket = ServerboundHello.builder()
-      .token(shard == null ? new Token(new byte[0], 0) : shard.token())
+      .token(new String(cloudToken.token(), StandardCharsets.UTF_8))
       .supportedEncryptionAlgorithms(Security.getAlgorithms("Cipher").stream().filter(s -> s.startsWith("AES")).collect(Collectors.toList()))
       .supportedEncryptionKeySizes(Collections.singletonList(128))
       .supportedCompressionAlgorithms(Collections.singletonList("GZIP"))
@@ -64,12 +69,24 @@ public final class HandshakeReceiver extends ChannelInboundHandlerAdapter implem
       .clientboundProtocol(PacketRegistry.packetSpecsFor(CLIENTBOUND))
       .serverboundProtocol(PacketRegistry.packetSpecsFor(SERVERBOUND))
       .build();
-    ctx.writeAndFlush(serverHelloPacket);
+    ctx.writeAndFlush(serverHelloPacket).addListener(future -> {
+      if (!future.isSuccess()) {
+        ctx.fireExceptionCaught(new IllegalStateException(
+          "Unable to send the initial cloud handshake packet",
+          future.cause()
+        ));
+      }
+    });
+    ctx.fireChannelActive();
   }
 
   @Override
   public void channelRead(ChannelHandlerContext ctx, Object object) {
     Packet<?> packet = (Packet<?>) object;
+    if (packet instanceof ClientboundDisconnect) {
+      onCloseConnection((ClientboundDisconnect) packet);
+      return;
+    }
     if (!(packet instanceof ClientboundHello)) {
       //noinspection unchecked
       session.receivePacketLater((Packet<Clientbound>) packet);
@@ -78,23 +95,38 @@ public final class HandshakeReceiver extends ChannelInboundHandlerAdapter implem
     //noinspection unchecked
     ((Packet<Clientbound>) packet).accept(this);
     ctx.writeAndFlush(buildConfirmEncryptionPacket()).addListener(future -> {
-      String algorithm = session.encryptionScheme();
-      // use AES with key from packet
-      Cipher downDecryptCipher = Cipher.getInstance(algorithm);
-      Cipher upEncryptCipher = Cipher.getInstance(algorithm);
+      if (!future.isSuccess()) {
+        ctx.fireExceptionCaught(new IllegalStateException(
+          "Unable to send the cloud encryption confirmation packet",
+          future.cause()
+        ));
+        return;
+      }
+      try {
+        String algorithm = session.encryptionScheme();
+        // use AES with key from packet
+        Cipher downDecryptCipher = Cipher.getInstance(algorithm);
+        Cipher upEncryptCipher = Cipher.getInstance(algorithm);
 
-      byte[] iv = session.verifyBytes();
-      downDecryptCipher.init(Cipher.DECRYPT_MODE, session.primaryKey(), new IvParameterSpec(iv));
-      upEncryptCipher.init(Cipher.ENCRYPT_MODE, session.primaryKey(), new IvParameterSpec(iv));
-      session.setEncryption(downDecryptCipher, upEncryptCipher);
+        byte[] iv = session.verifyBytes();
+        downDecryptCipher.init(Cipher.DECRYPT_MODE, session.primaryKey(), new IvParameterSpec(iv));
+        upEncryptCipher.init(Cipher.ENCRYPT_MODE, session.primaryKey(), new IvParameterSpec(iv));
+        session.setEncryption(downDecryptCipher, upEncryptCipher);
 
-      StandardClientRetriever processor = new StandardClientRetriever(session);
-      session.setProcessor(processor);
-      session.markStarted();
+        StandardClientRetriever processor = new StandardClientRetriever(session);
+        session.setProcessor(processor);
+        session.markStarted();
 
-      session.pendingIncoming().forEach(
-        clientboundPacket -> clientboundPacket.accept(processor)
-      );
+        Packet<Clientbound> pendingPacket;
+        while ((pendingPacket = session.pendingIncoming().poll()) != null) {
+          pendingPacket.accept(processor);
+        }
+      } catch (Exception exception) {
+        ctx.fireExceptionCaught(new IllegalStateException(
+          "Unable to finish the cloud encryption handshake",
+          exception
+        ));
+      }
     });
   }
 
@@ -117,10 +149,19 @@ public final class HandshakeReceiver extends ChannelInboundHandlerAdapter implem
       Key generatedKey = generateKey(session.encryptionAlgorithm(), 128);
       session.setPrimaryKey(generatedKey);
     } catch (NoSuchAlgorithmException e) {
-      e.printStackTrace();
-      session.close();
+      throw new IllegalStateException(
+        "Cloud selected unsupported encryption algorithm "
+          + session.encryptionAlgorithm(),
+        e
+      );
     }
     session.setVerifyBytes(packet.verifyToken());
+  }
+
+  @Override
+  public void onCloseConnection(ClientboundDisconnect packet) {
+    IntaveLogger.logger().info("[Cloud] Connection closed: " + packet.reason());
+    session.close();
   }
 
   private ServerboundConfirmEncryption buildConfirmEncryptionPacket() {
@@ -135,16 +176,10 @@ public final class HandshakeReceiver extends ChannelInboundHandlerAdapter implem
       cipher.init(Cipher.ENCRYPT_MODE, session.serverPublicKey());
       return cipher.doFinal(bytes);
     } catch (Exception e) {
-      session.close();
-      throw new RuntimeException(e);
+      throw new IllegalStateException(
+        "Unable to encrypt the cloud handshake secret with the server public key",
+        e
+      );
     }
-  }
-
-  @Override
-  public void exceptionCaught(ChannelHandlerContext channelHandlerContext, Throwable throwable) throws Exception {
-//    channelHandlerContext.fireExceptionCaught(throwable);
-//    throwable.printStackTrace();
-    IntaveLogger.logger().info("Exception caught in cloud connection " + channelHandlerContext.name() + ": " + throwable.getMessage());
-    channelHandlerContext.close();
   }
 }

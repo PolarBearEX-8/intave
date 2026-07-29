@@ -17,8 +17,7 @@ import java.util.Collections;
 import java.util.List;
 
 import static de.jpx3.intave.IntaveBuildConfig.*;
-import static de.jpx3.intave.module.nayoro.OperationalMode.CLOUD_STORAGE;
-import static de.jpx3.intave.module.nayoro.OperationalMode.LOCAL_STORAGE;
+import static de.jpx3.intave.module.nayoro.OperationalMode.CLOUD_TRANSMISSION;
 
 public final class IntaveControl {
   public static final boolean APPLY_GLOBAL_LOW_TRUSTFACTOR = false;
@@ -86,7 +85,7 @@ public final class IntaveControl {
   public static final boolean FIRST_TICK_MUST_BE_FULLY_SIMULATED = false;
   public static final boolean NO_TOLERANCE_PHYSICS = false;
 
-  public static final OperationalMode SAMPLE_OPERATIONAL_MODE = GOMME ? /*GOMME_UPLOAD*/CLOUD_STORAGE : (PRODUCTION ? CLOUD_STORAGE : LOCAL_STORAGE);
+  public static final OperationalMode SAMPLE_OPERATIONAL_MODE = CLOUD_TRANSMISSION;
 
   public static final boolean USE_EXTERNAL_CONFIGURATION_FILE = !PRODUCTION;
   public static final boolean DEBUG = false;

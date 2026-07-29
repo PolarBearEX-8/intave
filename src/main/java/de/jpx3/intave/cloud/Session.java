@@ -12,28 +12,35 @@
 package de.jpx3.intave.cloud;
 
 import de.jpx3.intave.IntaveLogger;
-import de.jpx3.intave.access.player.trust.TrustFactor;
 import de.jpx3.intave.cloud.protocol.*;
 import de.jpx3.intave.cloud.protocol.listener.Clientbound;
 import de.jpx3.intave.cloud.protocol.listener.Serverbound;
-import de.jpx3.intave.cloud.protocol.packets.ServerboundKeepAlive;
+import de.jpx3.intave.cloud.protocol.packets.base.ServerboundKeepAlive;
+import de.jpx3.intave.cloud.protocol.packets.player.ServerboundPlayerLogin;
+import de.jpx3.intave.cloud.protocol.packets.player.ServerboundPlayerLogout;
 import de.jpx3.intave.cloud.protocol.pipeline.*;
+import de.jpx3.intave.executor.BackgroundExecutors;
 import de.jpx3.intave.executor.IntaveThreadFactory;
-import de.jpx3.intave.module.nayoro.Classifier;
+import de.jpx3.intave.user.User;
+import de.jpx3.intave.user.UserRepository;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.*;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.timeout.ReadTimeoutHandler;
+import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
+import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
+import org.jetbrains.annotations.NotNull;
 
 import javax.crypto.Cipher;
-import java.nio.ByteBuffer;
 import java.security.Key;
 import java.security.PublicKey;
 import java.util.*;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.LongAdder;
 import java.util.function.Consumer;
+import java.util.function.LongFunction;
 
 import static de.jpx3.intave.cloud.protocol.Direction.CLIENTBOUND;
 import static de.jpx3.intave.cloud.protocol.Direction.SERVERBOUND;
@@ -41,256 +48,478 @@ import static io.netty.channel.ChannelOption.CONNECT_TIMEOUT_MILLIS;
 import static java.util.concurrent.TimeUnit.SECONDS;
 
 public final class Session {
-  private Shard shard;
-  private Cloud cloud;
-  private Channel channel;
-  private ProtocolSpecification protocol = new ProtocolSpecification();
-  private final Queue<Packet<Serverbound>> pendingOutgoing = new ArrayDeque<>();
-  private final Queue<Packet<Clientbound>> pendingIncoming = new ArrayDeque<>();
-  private final List<Consumer<Void>> startupSubscribers = new ArrayList<>();
-  private final List<Consumer<Session>> shutdownSubscribers = new ArrayList<>();
+	private CloudToken cloudToken;
+	private volatile Channel channel;
+	private ProtocolSpecification protocol = new ProtocolSpecification();
+	private final Queue<Packet<Serverbound>> pendingOutgoing = new ConcurrentLinkedQueue<>();
+	private final Queue<Packet<Clientbound>> pendingIncoming = new ConcurrentLinkedQueue<>();
+	private final List<Consumer<Void>> startupSubscribers = new ArrayList<>();
+	private final List<Consumer<Session>> shutdownSubscribers = new ArrayList<>();
 
-  private PublicKey serverPublicKey;
-  private String encryptionAlgorithm;
-  private String encryptionScheme;
-  private Key primaryKey;
-  private byte[] verifyBytes;
-//  private Key aesKey;
+	private PublicKey serverPublicKey;
+	private String encryptionAlgorithm;
+	private String encryptionScheme;
+	private Key primaryKey;
+	private byte[] verifyBytes;
 
-  private boolean started;
+	private volatile boolean started;
+	private final LongAdder receivedBytes = new LongAdder();
+	private final LongAdder sentBytes = new LongAdder();
 
-  private final LongAdder receivedBytes = new LongAdder();
-  private final LongAdder sentBytes = new LongAdder();
+	private final Map<UUID, Long> userToPlayerId = new HashMap<>();
+	private final Long2ObjectMap<UUID> playerIdToUser = new Long2ObjectOpenHashMap<>();
+	private final Set<UUID> requestedPlayerIds = new HashSet<>();
+	private final Set<UUID> pendingPlayerLogouts = new HashSet<>();
+	private final Set<UUID> locallyOnlineUsers = new HashSet<>();
+	private final Map<UUID, Queue<LongFunction<? extends Packet<Serverbound>>>> pendingPlayerPackets = new HashMap<>();
 
-  public Session(Shard shard, Cloud cloud) {
-    this.shard = shard;
-    this.cloud = cloud;
-  }
 
-  public void tryToConnect(Consumer<Boolean> lazyReturn) {
-    EventLoopGroup group = new NioEventLoopGroup(2, IntaveThreadFactory.ofPriority(3));
-    Bootstrap bootstrap = new Bootstrap()
-      .group(group)
-      .channel(NioSocketChannel.class)
-      .option(CONNECT_TIMEOUT_MILLIS, 8000)
-      .handler(new ChannelInitializer<SocketChannel>() {
-        @Override
-        protected void initChannel(SocketChannel ch) throws Exception {
-          ch.pipeline()
-            .addLast("timeout", new ReadTimeoutHandler(120))
-            .addLast("decompression", new Decompression(256))
-            .addLast("compression", new Compression(256))
-            .addLast("codec", new PacketCodec(protocol, CLIENTBOUND))
-            .addLast("processor", new HandshakeReceiver(Session.this))
-          ;
-        }
-      });
+	private final Attestations attestations = new Attestations();
 
-    try {
-      boolean connected = bootstrap.connect(shard.domain(), shard.port()).await().addListener(future -> {
-        if (!future.isSuccess()) {
-          lazyReturn.accept(false);
-          return;
-        }
-        channel = ((ChannelFuture) future).channel();
-        channel.closeFuture().addListener(future2 -> {
-          IntaveLogger.logger().info("Cloud session closed");
-          shutdownSubscribers.forEach(subscriber -> subscriber.accept(this));
-          group.shutdownGracefully();
-          lazyReturn.accept(false);
-        });
-        lazyReturn.accept(true);
-      }).await(10, SECONDS);
-      if (!connected) {
-        IntaveLogger.logger().info("Unable to connect to cloud");
-        lazyReturn.accept(false);
-      } else {
-        IntaveLogger.logger().info("Connected to cloud");
-      }
-    } catch (Exception e) {
-      lazyReturn.accept(false);
-    }
-  }
+	public Session(CloudToken cloudToken) {
+		this.cloudToken = cloudToken;
+	}
 
-  public void keepAliveTick() {
-    if (canSend(ServerboundKeepAlive.class)) {
-      send(new ServerboundKeepAlive());
-    }
-  }
+	public void tryToConnect(Consumer<Boolean> lazyReturn) {
+		EventLoopGroup group = new NioEventLoopGroup(2, IntaveThreadFactory.ofPriority(3));
+		Bootstrap bootstrap = new Bootstrap().group(group).channel(NioSocketChannel.class).option(CONNECT_TIMEOUT_MILLIS, 8000).handler(new ChannelInitializer<SocketChannel>() {
+			@Override
+			protected void initChannel(SocketChannel ch) throws Exception {
+				ch.pipeline().addLast("timeout", new ReadTimeoutHandler(120))
+					.addLast("decompression", new Decompression(256))
+					.addLast("compression", new Compression(256))
+					.addLast("codec", new PacketCodec(protocol, CLIENTBOUND))
+					.addLast("processor", new HandshakeReceiver(Session.this))
+					.addLast("errors", new Errors(Session.this));
+			}
+		});
 
-  public boolean active() {
-    return channel != null && channel.isActive();
-  }
+		try {
+			ChannelFuture connectFuture = bootstrap.connect(cloudToken.domain(), cloudToken.port());
+			channel = connectFuture.channel();
+			if (!connectFuture.await(10, SECONDS)) {
+				connectFuture.cancel(false);
+				connectFuture.channel().close();
+				IntaveLogger.logger().error("[Cloud] Timed out connecting to " + endpoint() + " after 10 seconds");
+				group.shutdownGracefully();
+				lazyReturn.accept(false);
+				return;
+			}
+			if (!connectFuture.isSuccess()) {
+				IntaveLogger.logger().error("[Cloud] Unable to connect to " + endpoint() + ": " + describeFailure(connectFuture.cause()));
+				connectFuture.channel().close();
+				group.shutdownGracefully();
+				lazyReturn.accept(false);
+				return;
+			}
 
-  public void reset() {
-    shard = null;
-    cloud = null;
-    channel = null;
-    protocol = new ProtocolSpecification();
-    pendingIncoming.clear();
-    pendingOutgoing.clear();
-  }
+			IntaveLogger.logger().info("[Cloud] TCP connection established with " + endpoint() + "; starting handshake");
+			lazyReturn.accept(true);
+			channel.closeFuture().addListener(closeFuture -> {
+				started = false;
+				if (closeFuture.cause() == null) {
+					IntaveLogger.logger().info("[Cloud] Connection to " + endpoint() + " closed");
+				} else {
+					IntaveLogger.logger().error("[Cloud] Connection to " + endpoint() + " closed unexpectedly: " + describeFailure(closeFuture.cause()));
+				}
+				notifyShutdownSubscribers();
+				group.shutdownGracefully();
+				lazyReturn.accept(false);
+			});
+		} catch (InterruptedException exception) {
+			Thread.currentThread().interrupt();
+			IntaveLogger.logger().error("[Cloud] Interrupted while connecting to " + endpoint() + ": " + describeFailure(exception));
+			group.shutdownGracefully();
+			lazyReturn.accept(false);
+		} catch (Exception exception) {
+			IntaveLogger.logger().error("[Cloud] Failed to initialize connection to " + endpoint() + ": " + describeFailure(exception));
+			exception.printStackTrace();
+			group.shutdownGracefully();
+			lazyReturn.accept(false);
+		}
+	}
 
-  public void send(Packet<Serverbound> packet) {
-    if (channel == null || !channel.isActive()) {
-      pendingOutgoing.add(packet);
-      return;
-    }
-    while (!pendingOutgoing.isEmpty()) {
-      channel.writeAndFlush(pendingOutgoing.poll());
-    }
-    channel.writeAndFlush(packet);
-  }
+	public void keepAliveTick() {
+		if (canSend(ServerboundKeepAlive.class)) {
+			writePacket(new ServerboundKeepAlive());
+		}
+	}
 
-  public long sentBytes() {
-    return sentBytes.longValue();
-  }
+	public void retryMissedAttestations() {
+		BackgroundExecutors.execute(() -> {
+			attestations.removeExpired();
+			attestations.forEachResendable(attestation -> {
+				if (attestation.needsRetry()) {
+					writePacket(attestation.packet());
+				}
+			});
+		});
+	}
 
-  public long receivedBytes() {
-    return receivedBytes.longValue();
-  }
+	public void confirmAttestations(List<UUID> uuids) {
+		BackgroundExecutors.execute(() -> attestations.confirm(uuids));
+	}
 
-  public void serveTrustfactorRequest(Identity id, TrustFactor trustFactor) {
-    cloud.serveTrustfactorRequest(id, trustFactor);
-  }
+	public boolean active() {
+		return started && channel != null && channel.isActive();
+	}
 
-  public void serveStorageRequest(Identity id, ByteBuffer buffer) {
-    cloud.serveStorageRequest(id, buffer);
-  }
+	public void reset() {
+		cloudToken = null;
+		channel = null;
+		protocol = new ProtocolSpecification();
+		started = false;
+		pendingIncoming.clear();
+		pendingOutgoing.clear();
+		userToPlayerId.clear();
+		playerIdToUser.clear();
+		requestedPlayerIds.clear();
+		pendingPlayerLogouts.clear();
+		locallyOnlineUsers.clear();
+		pendingPlayerPackets.clear();
+	}
 
-  public void serveInquiryResponse(UUID requestId, Map<String, String> properties) {
-    cloud.serveInquiryResponse(requestId, properties);
-  }
+	public synchronized void sendUserPacket(User user, LongFunction<? extends Packet<Serverbound>> packetGenerator) {
+		if (!user.hasPlayer()) {
+			return;
+		}
+		UUID userId = user.id();
+		if (hasUserId(userId)) {
+			long playerId = playerIdByUser(userId);
+			sendPacket(packetGenerator.apply(playerId));
+		} else {
+			requestPlayerId(user, userId);
+			pendingPlayerPackets.computeIfAbsent(userId, key -> new ArrayDeque<>()).add(packetGenerator);
+		}
+	}
 
-  public void serverUploadPlayerLogsRequest(Identity id, int nonce, String logId) {
-    cloud.serveUploadPlayerLogs(id, nonce, logId);
-  }
+	public synchronized void announceUser(User user) {
+		if (!user.hasPlayer()) {
+			return;
+		}
+		UUID userId = user.id();
+		locallyOnlineUsers.add(userId);
+		if (!hasUserId(userId)) {
+			requestPlayerId(user, userId);
+		}
+	}
 
-  public void serveSampleTransmissionRequest(Identity id, boolean allowed, Classifier classifier) {
-    cloud.serveSampleTransmissionRequest(id, allowed, classifier);
-  }
+	public synchronized void sendUserLogout(User user) {
+		UUID userId = user.id();
+		locallyOnlineUsers.remove(userId);
+		pendingPlayerPackets.remove(userId);
+		if (!hasUserId(userId)) {
+			if (requestedPlayerIds.contains(userId)) {
+				pendingPlayerLogouts.add(userId);
+			}
+			return;
+		}
+		long playerId = playerIdByUser(userId);
+		sendPacket(new ServerboundPlayerLogout(playerId));
+		removeUserId(userId);
+	}
 
-  public void onShardsAddition(List<? extends Shard> shards) {
-    shards.forEach(shard -> cloud.openSession(shard));;
-  }
+	public void sendPacket(Packet<Serverbound> packet) {
+		if (packet instanceof AttestedPacket) {
+			AttestedPacket<?> attestedPacket = (AttestedPacket<?>) packet;
+			if (attestedPacket.hasIdempotencyToken()) {
+				throw new IllegalArgumentException("AttestedPacket already has an idempotency token");
+			}
+			//noinspection unchecked
+			Attestation attestation = new Attestation((AttestedPacket<Serverbound>) attestedPacket, 3, 60, SECONDS);
+			attestations.add(attestation);
+			attestedPacket.setIdempotencyToken(attestation.idempotencyKey());
+			attestedPacket.setRequestId(attestation.newRequestId());
+		}
+		writePacket(packet);
+	}
 
-  public void receivePacketLater(Packet<Clientbound> packet) {
-    pendingIncoming.add(packet);
-  }
+	// Just write the packet to wire, no attestation checks, nothing
+	public synchronized void writePacket(Packet<Serverbound> packet) {
+		if (!started || channel == null || !channel.isActive()) {
+			pendingOutgoing.add(packet);
+			return;
+		}
+		flushPendingPackets();
+		writeToChannel(packet);
+	}
 
-  public Queue<Packet<Clientbound>> pendingIncoming() {
-    return pendingIncoming;
-  }
+	public long sentBytes() {
+		return sentBytes.longValue();
+	}
 
-  public synchronized void setEncryption(
-    Cipher downwardDecryption,
-    Cipher upwardEncryption
-  ) {
-    ChannelPipeline pipeline = channel.pipeline();
-    ChannelHandler current = pipeline.get("encryption");
+	public long receivedBytes() {
+		return receivedBytes.longValue();
+	}
 
-    Encryption encryption = new Encryption(upwardEncryption, sentBytes);
-    Decryption decryption = new Decryption(downwardDecryption, receivedBytes);
+	public void receivePacketLater(Packet<Clientbound> packet) {
+		pendingIncoming.add(packet);
+	}
 
-    if (current == null) {
-      pipeline.addAfter("timeout", "encryption", encryption);
-      pipeline.addAfter("timeout","decryption", decryption);
+	public Queue<Packet<Clientbound>> pendingIncoming() {
+		return pendingIncoming;
+	}
 
-      pipeline.addAfter("decryption", "accumulator", new Accumulator());
-      pipeline.addAfter("encryption", "prepender", new Prepender());
-    } else {
-      pipeline.replace("encryption", "encryption", encryption);
-      pipeline.replace("decryption", "decryption", decryption);
-    }
-  }
+	public synchronized void setEncryption(Cipher downwardDecryption, Cipher upwardEncryption) {
+		ChannelPipeline pipeline = channel.pipeline();
+		ChannelHandler current = pipeline.get("encryption");
 
-  public void setProcessor(ChannelHandler handler) {
-    pipeline().replace("processor", "processor", handler);
-  }
+		Encryption encryption = new Encryption(upwardEncryption, sentBytes);
+		Decryption decryption = new Decryption(downwardDecryption, receivedBytes);
 
-  public ChannelPipeline pipeline() {
-    return channel.pipeline();
-  }
+		if (current == null) {
+			pipeline.addAfter("timeout", "encryption", encryption);
+			pipeline.addAfter("timeout", "decryption", decryption);
 
-  public Shard shard() {
-    return shard;
-  }
+			pipeline.addAfter("decryption", "accumulator", new Accumulator());
+			pipeline.addAfter("encryption", "prepender", new Prepender());
+		} else {
+			pipeline.replace("encryption", "encryption", encryption);
+			pipeline.replace("decryption", "decryption", decryption);
+		}
+	}
 
-  public void close() {
-    if (channel != null) {
-      channel.close();
-    }
-  }
+	public void setProcessor(ChannelHandler handler) {
+		pipeline().replace("processor", "processor", handler);
+	}
 
-  public boolean canSend(Packet<Serverbound> packet) {
-    return channel != null && channel.isActive() &&
-      protocol.packetAvailable(SERVERBOUND, packet.name());
-  }
+	public ChannelPipeline pipeline() {
+		return channel.pipeline();
+	}
 
-  public boolean canSend(Class<? extends Packet<Serverbound>> packetClass) {
-    return channel != null && channel.isActive() &&
-      protocol.packetAvailable(SERVERBOUND, PacketRegistry.serverboundName(packetClass));
-  }
+	public CloudToken shard() {
+		return cloudToken;
+	}
 
-  public void subscribeToStarted(Consumer<Void> consumer) {
-    if (started) {
-      consumer.accept(null);
-    } else {
-      startupSubscribers.add(consumer);
-    }
-  }
+	public void close() {
+		if (channel != null) {
+			channel.close();
+		}
+	}
 
-  public void markStarted() {
-    started = true;
-    startupSubscribers.forEach(subscriber -> subscriber.accept(null));
-    startupSubscribers.clear();
-  }
+	public boolean canSend(Packet<Serverbound> packet) {
+		return active() && protocol.packetAvailable(SERVERBOUND, packet.name());
+	}
 
-  public void subscribeToShutdown(Consumer<Session> consumer) {
-    shutdownSubscribers.add(consumer);
-  }
+	public boolean canSend(Class<? extends Packet<Serverbound>> packetClass) {
+		return active() && protocol.packetAvailable(SERVERBOUND, PacketRegistry.serverboundName(packetClass));
+	}
 
-  public ProtocolSpecification protocol() {
-    return protocol;
-  }
+	public synchronized void subscribeToStarted(Consumer<Void> consumer) {
+		if (started) {
+			consumer.accept(null);
+		} else {
+			startupSubscribers.add(consumer);
+		}
+	}
 
-  public PublicKey serverPublicKey() {
-    return serverPublicKey;
-  }
+	public synchronized void markStarted() {
+		started = true;
+		flushPendingPackets();
+		startupSubscribers.forEach(subscriber -> subscriber.accept(null));
+		startupSubscribers.clear();
+		IntaveLogger.logger().info("[Cloud] Handshake with " + endpoint() + " completed");
+	}
 
-  public void setServerPublicKey(PublicKey serverPublicKey) {
-    this.serverPublicKey = serverPublicKey;
-  }
+	public boolean started() {
+		return started;
+	}
 
-  public String encryptionAlgorithm() {
-    return encryptionAlgorithm;
-  }
+	public synchronized void subscribeToShutdown(Consumer<Session> consumer) {
+		shutdownSubscribers.add(consumer);
+	}
 
-  public void setEncryptionAlgorithm(String encryptionAlgorithm) {
-    this.encryptionAlgorithm = encryptionAlgorithm;
-  }
+	public ProtocolSpecification protocol() {
+		return protocol;
+	}
 
-  public String encryptionScheme() {
-    return encryptionScheme;
-  }
+	public PublicKey serverPublicKey() {
+		return serverPublicKey;
+	}
 
-  public void setEncryptionScheme(String encryptionScheme) {
-    this.encryptionScheme = encryptionScheme;
-  }
+	public void setServerPublicKey(PublicKey serverPublicKey) {
+		this.serverPublicKey = serverPublicKey;
+	}
 
-  public Key primaryKey() {
-    return primaryKey;
-  }
+	public String encryptionAlgorithm() {
+		return encryptionAlgorithm;
+	}
 
-  public void setPrimaryKey(Key aesKey) {
-    this.primaryKey = aesKey;
-  }
+	public void setEncryptionAlgorithm(String encryptionAlgorithm) {
+		this.encryptionAlgorithm = encryptionAlgorithm;
+	}
 
-  public byte[] verifyBytes() {
-    return verifyBytes;
-  }
+	public String encryptionScheme() {
+		return encryptionScheme;
+	}
 
-  public void setVerifyBytes(byte[] verifyBytes) {
-    this.verifyBytes = verifyBytes;
-  }
+	public void setEncryptionScheme(String encryptionScheme) {
+		this.encryptionScheme = encryptionScheme;
+	}
+
+	public Key primaryKey() {
+		return primaryKey;
+	}
+
+	public void setPrimaryKey(Key aesKey) {
+		this.primaryKey = aesKey;
+	}
+
+	public byte[] verifyBytes() {
+		return verifyBytes;
+	}
+
+	public void setVerifyBytes(byte[] verifyBytes) {
+		this.verifyBytes = verifyBytes;
+	}
+
+	public synchronized @NotNull User userById(long playerId) {
+		UUID userId = userIdByPlayerId(playerId);
+		return userId == null ? UserRepository.fallback() : UserRepository.userOf(userId);
+	}
+
+	public synchronized UUID userIdByPlayerId(long playerId) {
+		return playerIdToUser.get(playerId);
+	}
+
+	public synchronized long playerIdByUser(User user) {
+		return playerIdByUser(user.id());
+	}
+
+	private long playerIdByUser(UUID userId) {
+		return userToPlayerId.getOrDefault(userId, -1L);
+	}
+
+	public synchronized void setUserId(UUID userId, long playerId) {
+		if (userToPlayerId.containsKey(userId)) {
+			long previousPlayerId = userToPlayerId.get(userId);
+			if (previousPlayerId != playerId) {
+				playerIdToUser.remove(previousPlayerId);
+			}
+		}
+		UUID previousUserId = playerIdToUser.get(playerId);
+		if (previousUserId != null && !previousUserId.equals(userId)) {
+			userToPlayerId.remove(previousUserId);
+		}
+		userToPlayerId.put(userId, playerId);
+		playerIdToUser.put(playerId, userId);
+		requestedPlayerIds.remove(userId);
+
+		if (pendingPlayerLogouts.remove(userId)) {
+			sendPacket(new ServerboundPlayerLogout(playerId));
+			removeUserId(userId);
+			if (locallyOnlineUsers.contains(userId)) {
+				User currentUser = UserRepository.userOf(userId);
+				announceUser(currentUser);
+			}
+			return;
+		}
+
+		Queue<LongFunction<? extends Packet<Serverbound>>> pending = pendingPlayerPackets.remove(userId);
+		if (pending == null) {
+			return;
+		}
+		LongFunction<? extends Packet<Serverbound>> packetGenerator;
+		while ((packetGenerator = pending.poll()) != null) {
+			sendPacket(packetGenerator.apply(playerId));
+		}
+	}
+
+	public synchronized void removeUserId(User user) {
+		removeUserId(user.id());
+	}
+
+	private void removeUserId(UUID userId) {
+		long playerId = userToPlayerId.getOrDefault(userId, -1L);
+		userToPlayerId.remove(userId);
+		playerIdToUser.remove(playerId);
+		requestedPlayerIds.remove(userId);
+		pendingPlayerLogouts.remove(userId);
+		pendingPlayerPackets.remove(userId);
+	}
+
+	public synchronized boolean hasUserId(User user) {
+		return hasUserId(user.id());
+	}
+
+	private boolean hasUserId(UUID userId) {
+		return userToPlayerId.containsKey(userId);
+	}
+
+	public synchronized boolean awaitingPlayerId(Identity identity) {
+		UUID userId = identity.id();
+		return userId != null && requestedPlayerIds.contains(userId);
+	}
+
+	public void clarifyUnknownPlayerId(User user, long id) {
+		BackgroundExecutors.execute(() -> {
+			sendPacket(new ServerboundPlayerLogin(Identity.from(user), id));
+		});
+	}
+
+	private void flushPendingPackets() {
+		Packet<Serverbound> pendingPacket;
+		while ((pendingPacket = pendingOutgoing.poll()) != null) {
+			writeToChannel(pendingPacket);
+		}
+	}
+
+	private void requestPlayerId(User user, UUID userId) {
+		if (requestedPlayerIds.add(userId)) {
+			try {
+				sendPacket(new ServerboundPlayerLogin(Identity.from(user)));
+			} catch (RuntimeException exception) {
+				requestedPlayerIds.remove(userId);
+				throw exception;
+			}
+		}
+	}
+
+	private void writeToChannel(Packet<Serverbound> packet) {
+		Channel currentChannel = channel;
+		currentChannel.writeAndFlush(packet).addListener(future -> {
+			if (!future.isSuccess()) {
+				Throwable cause = future.cause();
+				IntaveLogger.logger().error("[Cloud] Failed to send serverbound packet '" + packet.name() + "' (version " + packet.version() + ") to " + endpoint() + "; channel active=" + currentChannel.isActive() + ", writable=" + currentChannel.isWritable() + ": " + describeFailure(cause));
+				if (cause != null) {
+					cause.printStackTrace();
+				}
+			}
+		});
+	}
+
+	private void notifyShutdownSubscribers() {
+		List<Consumer<Session>> subscribers;
+		synchronized (this) {
+			subscribers = new ArrayList<>(shutdownSubscribers);
+			shutdownSubscribers.clear();
+		}
+		subscribers.forEach(subscriber -> subscriber.accept(this));
+	}
+
+	private String endpoint() {
+		CloudToken token = cloudToken;
+		return token == null ? "<unknown>" : token.domain() + ":" + token.port();
+	}
+
+	public static String describeFailure(Throwable throwable) {
+		if (throwable == null) {
+			return "unknown failure";
+		}
+		StringBuilder description = new StringBuilder();
+		Throwable current = throwable;
+		int depth = 0;
+		while (current != null && depth++ < 6) {
+			if (description.length() > 0) {
+				description.append(" caused by ");
+			}
+			description.append(current.getClass().getSimpleName());
+			String message = current.getMessage();
+			if (message != null && !message.trim().isEmpty()) {
+				description.append(": ").append(message);
+			}
+			current = current.getCause();
+		}
+		return description.toString();
+	}
 }

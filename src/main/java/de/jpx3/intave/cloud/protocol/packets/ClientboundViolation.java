@@ -13,7 +13,6 @@ package de.jpx3.intave.cloud.protocol.packets;
 
 import com.google.gson.stream.JsonReader;
 import com.google.gson.stream.JsonWriter;
-import de.jpx3.intave.cloud.protocol.Identity;
 import de.jpx3.intave.cloud.protocol.JsonPacket;
 import de.jpx3.intave.cloud.protocol.listener.Clientbound;
 
@@ -21,7 +20,7 @@ import static com.google.gson.stream.JsonToken.NAME;
 import static de.jpx3.intave.cloud.protocol.Direction.CLIENTBOUND;
 
 public final class ClientboundViolation extends JsonPacket<Clientbound> {
-  private Identity id;
+  private long id;
   private String check;
   private String threshold;
   private String message;
@@ -32,7 +31,7 @@ public final class ClientboundViolation extends JsonPacket<Clientbound> {
     super(CLIENTBOUND, "VIOLATION", "1");
   }
 
-  public ClientboundViolation(Identity id, String check, String threshold, String message, String details, int vl) {
+  public ClientboundViolation(long id, String check, String threshold, String message, String details, int vl) {
     super(CLIENTBOUND, "VIOLATION", "1");
     this.id = id;
     this.check = check;
@@ -46,8 +45,7 @@ public final class ClientboundViolation extends JsonPacket<Clientbound> {
   public void serialize(JsonWriter writer) {
     try {
       writer.beginObject();
-      writer.name("id");
-      id.serialize(writer);
+      writer.name("id").value(id);
       writer.name("check").value(check);
       writer.name("threshold").value(threshold);
       writer.name("message").value(message);
@@ -56,7 +54,7 @@ public final class ClientboundViolation extends JsonPacket<Clientbound> {
 
       writer.endObject();
     } catch (Exception e) {
-      e.printStackTrace();
+      throw new IllegalStateException("Unable to serialize violation packet", e);
     }
   }
 
@@ -69,7 +67,7 @@ public final class ClientboundViolation extends JsonPacket<Clientbound> {
         while (reader.peek() == NAME) {
           switch (reader.nextName()) {
             case "id":
-              id = Identity.from(reader);
+              id = reader.nextLong();
               break;
             case "check":
               check = reader.nextString();
@@ -94,11 +92,11 @@ public final class ClientboundViolation extends JsonPacket<Clientbound> {
       }
       reader.endObject();
     } catch (Exception e) {
-      e.printStackTrace();
+      throw new IllegalStateException("Unable to deserialize violation packet", e);
     }
   }
 
-  public Identity id() {
+  public long id() {
     return id;
   }
 

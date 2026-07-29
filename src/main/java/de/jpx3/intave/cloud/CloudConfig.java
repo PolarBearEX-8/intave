@@ -11,10 +11,16 @@
 
 package de.jpx3.intave.cloud;
 
+import de.jpx3.intave.IntaveLogger;
+import de.jpx3.intave.annotate.Nullable;
+import de.jpx3.intave.cloud.protocol.CloudToken;
+import de.jpx3.intave.share.Result;
 import org.bukkit.configuration.ConfigurationSection;
 
 public final class CloudConfig {
   private boolean enabled;
+  private CloudToken connectionSettings;
+  private PrivacyMode privacyMode;
   private CloudFeatures features;
 
   public boolean isEnabled() {
@@ -33,6 +39,19 @@ public final class CloudConfig {
     boolean cloudTrustFactor = featuresSection == null || featuresSection.getBoolean("trustfactor", featuresSection.getBoolean("cloud-trustfactor", true));
     boolean cloudSamples = featuresSection == null || featuresSection.getBoolean("samples",  featuresSection.getBoolean("cloud-heuristics", true));
     boolean cloudLogs = true;//featuresSection == null || featuresSection.getBoolean("logs", featuresSection.getBoolean("cloud-logs", true));
+    PrivacyMode privacyMode = PrivacyMode.fromString(section == null ? "BEST_DETECTION" : section.getString("privacy-mode", "BEST_DETECTION"));
+    String cloudToken = section == null ? null : section.getString("token");
+    CloudToken connectionSettings = null;
+    if (cloudToken != null) {
+      Result<CloudToken, String> connectionStringResult = CloudToken.fromString(cloudToken);
+      if (connectionStringResult.erroneous()) {
+        IntaveLogger.logger().error("Unable to read cloud token: " + connectionStringResult.error());
+      } else {
+        connectionSettings = connectionStringResult.result();
+      }
+    } else {
+      IntaveLogger.logger().info("No cloud token provided, cloud will not be enabled");
+    }
     CloudFeatures features = new CloudFeatures();
     features.cloudStorage = cloudStorage;
     features.cloudTrustFactor = cloudTrustFactor;
@@ -40,8 +59,22 @@ public final class CloudConfig {
     features.cloudLogs = cloudLogs;
     CloudConfig config = new CloudConfig();
     config.enabled = enabled;
+    config.connectionSettings = connectionSettings;
     config.features = features;
+    config.privacyMode = privacyMode;
     return config;
+  }
+
+  public @Nullable CloudToken connectionSettings() {
+    return this.connectionSettings;
+  }
+
+  public boolean hasConnectionSettings() {
+    return this.connectionSettings != null;
+  }
+
+  public PrivacyMode privacy() {
+    return this.privacyMode;
   }
 
   public static class CloudFeatures {

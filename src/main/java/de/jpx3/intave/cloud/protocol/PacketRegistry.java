@@ -14,7 +14,14 @@ package de.jpx3.intave.cloud.protocol;
 import com.google.common.collect.Maps;
 import de.jpx3.intave.cloud.protocol.listener.Clientbound;
 import de.jpx3.intave.cloud.protocol.listener.Serverbound;
-import de.jpx3.intave.cloud.protocol.packets.*;
+import de.jpx3.intave.cloud.protocol.packets.ClientboundCombatModifier;
+import de.jpx3.intave.cloud.protocol.packets.ClientboundSetTrustfactor;
+import de.jpx3.intave.cloud.protocol.packets.ClientboundViolation;
+import de.jpx3.intave.cloud.protocol.packets.ServerboundReport;
+import de.jpx3.intave.cloud.protocol.packets.base.*;
+import de.jpx3.intave.cloud.protocol.packets.player.*;
+import de.jpx3.intave.cloud.protocol.packets.sampling.ClientboundSetSamplingState;
+import de.jpx3.intave.cloud.protocol.packets.sampling.ServerboundPassSample;
 
 import java.util.HashMap;
 import java.util.HashSet;
@@ -27,30 +34,25 @@ public final class PacketRegistry {
   private static final Map<Direction, Map<String, PacketSpecification>> specifications = Maps.newEnumMap(Direction.class);
 
   static {
+    registerClientbound(ClientboundConfirmAttestations.class);
     registerClientbound(ClientboundDisconnect.class);
     registerClientbound(ClientboundCombatModifier.class);
-    registerClientbound(ClientboundDownloadStorage.class);
     registerClientbound(ClientboundHello.class);
+    registerClientbound(ClientboundSendMessage.class);
     registerClientbound(ClientboundSetTrustfactor.class);
     registerClientbound(ClientboundViolation.class);
     registerClientbound(ClientboundKeepAlive.class);
-    registerClientbound(ClientboundLogReceive.class);
-    registerClientbound(ClientboundSampleTransmissionAcknowledgement.class);
-    registerClientbound(ClientboundCommand.class);
-    registerClientbound(ClientboundInquiryResponse.class);
+    registerClientbound(ClientboundSetSamplingState.class);
+    registerClientbound(ClientboundSetPlayerId.class);
+    registerClientbound(ClientboundClarifyUnknownPlayerId.class);
 
     registerServerbound(ServerboundConfirmEncryption.class);
+    registerServerbound(ServerboundReport.class);
     registerServerbound(ServerboundHello.class);
-    registerServerbound(ServerboundPassNayoro.class);
-    registerServerbound(ServerboundPlayerPlayStateChange.class);
-    registerServerbound(ServerboundRequestStorage.class);
-    registerServerbound(ServerboundRequestTrustfactor.class);
-    registerServerbound(ServerboundUploadStorage.class);
+    registerServerbound(ServerboundPassSample.class);
+    registerServerbound(ServerboundPlayerLogin.class);
+    registerServerbound(ServerboundPlayerLogout.class);
     registerServerbound(ServerboundKeepAlive.class);
-    registerServerbound(ServerboundUploadLogs.class);
-    registerServerbound(ServerboundSampleTransmissionRequest.class);
-    registerServerbound(ServerboundSampleCompleted.class);
-    registerServerbound(ServerboundStatusInquiry.class);
   }
   
   private static void registerClientbound(Class<? extends Packet<?>> packetClass) {
@@ -78,10 +80,24 @@ public final class PacketRegistry {
   }
 
   public static Packet<?> fromName(Direction direction, String name) {
+    Map<String, Class<? extends Packet<?>>> packets = packetByName.get(direction);
+    Class<? extends Packet<?>> packetClass =
+      packets == null ? null : packets.get(name);
+    if (packetClass == null) {
+      throw new IllegalArgumentException(
+        "Unknown " + direction.name().toLowerCase() + " cloud packet name '"
+          + name + "'; registered names are "
+          + (packets == null ? "[]" : packets.keySet())
+      );
+    }
     try {
-      return packetByName.get(direction).get(name).newInstance();
+      return packetClass.newInstance();
     } catch (Exception e) {
-      throw new RuntimeException(e);
+      throw new IllegalStateException(
+        "Unable to construct " + direction.name().toLowerCase()
+          + " cloud packet '" + name + "' (" + packetClass.getName() + ")",
+        e
+      );
     }
   }
 
@@ -99,13 +115,14 @@ public final class PacketRegistry {
 
   public static Packet<?> fromAssignedId(ProtocolSpecification protocol, Direction direction, int id) {
     Map<Integer, String> idToName = protocol.packetIdsOf(direction);
-    try {
-      String packetName = idToName.get(id);
-      return fromName(direction, packetName);
-    } catch (Exception exception) {
-      System.out.println("Failed to find packet id " + id + " direction " + direction + " (avail: " + idToName+")");
-      throw new RuntimeException(exception);
+    String packetName = idToName == null ? null : idToName.get(id);
+    if (packetName == null) {
+      throw new IllegalArgumentException(
+        "Unknown " + direction.name().toLowerCase() + " cloud packet id " + id
+          + "; negotiated ids are " + (idToName == null ? "{}" : idToName)
+      );
     }
+    return fromName(direction, packetName);
   }
 
   public static Map<String, PacketSpecification> packetSpecsFor(Direction direction) {
