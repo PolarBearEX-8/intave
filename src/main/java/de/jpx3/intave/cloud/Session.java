@@ -13,6 +13,8 @@ package de.jpx3.intave.cloud;
 
 import de.jpx3.intave.IntaveLogger;
 import de.jpx3.intave.cloud.protocol.*;
+import de.jpx3.intave.cloud.protocol.compress.CompressionAlgorithm;
+import de.jpx3.intave.cloud.protocol.compress.CompressionAlgorithms;
 import de.jpx3.intave.cloud.protocol.listener.Clientbound;
 import de.jpx3.intave.cloud.protocol.listener.Serverbound;
 import de.jpx3.intave.cloud.protocol.packets.base.ServerboundKeepAlive;
@@ -45,6 +47,7 @@ import java.util.function.LongFunction;
 import static de.jpx3.intave.cloud.protocol.Direction.CLIENTBOUND;
 import static de.jpx3.intave.cloud.protocol.Direction.SERVERBOUND;
 import static io.netty.channel.ChannelOption.CONNECT_TIMEOUT_MILLIS;
+import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.SECONDS;
 
 public final class Session {
@@ -61,6 +64,7 @@ public final class Session {
 	private String encryptionScheme;
 	private Key primaryKey;
 	private byte[] verifyBytes;
+	private CompressionAlgorithm compressionAlgorithm = CompressionAlgorithms.initial();
 
 	private volatile boolean started;
 	private final LongAdder receivedBytes = new LongAdder();
@@ -84,10 +88,11 @@ public final class Session {
 		EventLoopGroup group = new NioEventLoopGroup(2, IntaveThreadFactory.ofPriority(3));
 		Bootstrap bootstrap = new Bootstrap().group(group).channel(NioSocketChannel.class).option(CONNECT_TIMEOUT_MILLIS, 8000).handler(new ChannelInitializer<SocketChannel>() {
 			@Override
-			protected void initChannel(SocketChannel ch) throws Exception {
+			protected void initChannel(SocketChannel ch) {
 				ch.pipeline().addLast("timeout", new ReadTimeoutHandler(120))
-					.addLast("decompression", new Decompression(256))
-					.addLast("compression", new Compression(256))
+					.addLast("decompression", new Decompression(256, compressionAlgorithm))
+					.addLast("compression", new Compression(256, compressionAlgorithm))
+					.addLast("batching", new Batching(1024 * 128, 500, MILLISECONDS))
 					.addLast("codec", new PacketCodec(protocol, CLIENTBOUND))
 					.addLast("processor", new HandshakeReceiver(Session.this))
 					.addLast("errors", new Errors(Session.this));
@@ -168,6 +173,7 @@ public final class Session {
 		cloudToken = null;
 		channel = null;
 		protocol = new ProtocolSpecification();
+		compressionAlgorithm = CompressionAlgorithms.initial();
 		started = false;
 		pendingIncoming.clear();
 		pendingOutgoing.clear();
@@ -281,6 +287,17 @@ public final class Session {
 
 	public void setProcessor(ChannelHandler handler) {
 		pipeline().replace("processor", "processor", handler);
+	}
+
+	public void selectCompressionAlgorithm(String name) {
+		CompressionAlgorithm selected = CompressionAlgorithms.fromName(name);
+		if (selected.name().equals(compressionAlgorithm.name())) {
+			return;
+		}
+		ChannelPipeline pipeline = pipeline();
+		pipeline.replace("decompression", "decompression", new Decompression(256, selected));
+		pipeline.replace("compression", "compression", new Compression(256, selected));
+		compressionAlgorithm = selected;
 	}
 
 	public ChannelPipeline pipeline() {

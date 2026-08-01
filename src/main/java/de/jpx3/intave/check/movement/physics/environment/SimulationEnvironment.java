@@ -72,6 +72,10 @@ public interface SimulationEnvironment {
   float lastRotationYaw();
   float lastRotationPitch();
 
+  default boolean rotated() {
+    return lastRotationYaw() != rotationYaw() || lastRotationPitch() != rotationPitch();
+  }
+
   void updateMovement(
 	  double newPositionX, double newPositionY, double newPositionZ,
 	  float newRotationYaw, float newRotationPitch,

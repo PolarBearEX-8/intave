@@ -17,6 +17,7 @@ import de.jpx3.intave.cloud.protocol.CloudToken;
 import de.jpx3.intave.cloud.protocol.Packet;
 import de.jpx3.intave.cloud.protocol.PacketRegistry;
 import de.jpx3.intave.cloud.protocol.ProtocolSpecification;
+import de.jpx3.intave.cloud.protocol.compress.CompressionAlgorithms;
 import de.jpx3.intave.cloud.protocol.listener.Clientbound;
 import de.jpx3.intave.cloud.protocol.packets.base.ClientboundDisconnect;
 import de.jpx3.intave.cloud.protocol.packets.base.ClientboundHello;
@@ -64,7 +65,7 @@ public final class HandshakeReceiver extends ChannelInboundHandlerAdapter implem
       .token(new String(cloudToken.token(), StandardCharsets.UTF_8))
       .supportedEncryptionAlgorithms(Security.getAlgorithms("Cipher").stream().filter(s -> s.startsWith("AES")).collect(Collectors.toList()))
       .supportedEncryptionKeySizes(Collections.singletonList(128))
-      .supportedCompressionAlgorithms(Collections.singletonList("GZIP"))
+      .supportedCompressionAlgorithms(CompressionAlgorithms.supportedNames())
       .supportedHMACAlgorithms(hmacs)
       .clientboundProtocol(PacketRegistry.packetSpecsFor(CLIENTBOUND))
       .serverboundProtocol(PacketRegistry.packetSpecsFor(SERVERBOUND))
@@ -137,6 +138,7 @@ public final class HandshakeReceiver extends ChannelInboundHandlerAdapter implem
     protocol.overrideAvailablePackets(SERVERBOUND, new HashSet<>(packet.serverboundPackets()));
     protocol.overridePacketIds(CLIENTBOUND, packet.clientboundPackets());
     protocol.overridePacketIds(SERVERBOUND, packet.serverboundPackets());
+    session.selectCompressionAlgorithm(packet.compressionAlgorithm());
 
     String encryption = packet.encryptionAlgorithm();
     session.setEncryptionScheme(encryption);

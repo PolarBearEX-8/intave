@@ -58,6 +58,7 @@ import org.jetbrains.annotations.NotNull;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.LongAdder;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -245,6 +246,9 @@ public final class MovementMetadata implements SimulationEnvironment {
       pastTracker.put(value, value.pastDefault());
     }
   }
+
+  public LongAdder activeTicks = new LongAdder();
+  public LongAdder passiveTicks = new LongAdder();
 
   public SimulationEnvironment beforePreviousTickEnvironment;
 
@@ -860,14 +864,17 @@ public final class MovementMetadata implements SimulationEnvironment {
     // <performance>
     branchFrequency.merge(simulation.branchIdentifier(), 1L, Long::sum);
     if (branchFrequencyTrimCounter++ % 10000 == 0) {
-      branchFrequency.replaceAll((s, aLong) -> {
-        aLong = aLong / 3;
-        return aLong <= 0 ? 1L : aLong;
+      branchFrequency.replaceAll((key, occurrences) -> {
+        occurrences = occurrences / 3;
+        return occurrences <= 0 ? 1L : occurrences;
       });
       branchFrequency.entrySet().removeIf(entry -> entry.getValue() <= 10);
     }
-
     // </performance>
+    // <analytics>
+    boolean active = simulation.configuration().anyKeypress() || simulation.environment().rotated();
+    (active ? activeTicks : passiveTicks).increment();
+	  // </analytics>
     setLastMovementConfiguration(configuration);
     setSimulationResult(collider);
   }

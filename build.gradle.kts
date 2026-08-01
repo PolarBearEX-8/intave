@@ -89,6 +89,7 @@ dependencies {
   compileOnly("net.bytebuddy:byte-buddy:1.18.2")
 
   implementation("org.bouncycastle:bcpkix-jdk18on:1.85")
+  implementation("com.github.luben:zstd-jni:1.5.7-12")
 
   // floodgate
   compileOnly("org.geysermc.floodgate:api:2.0-SNAPSHOT")

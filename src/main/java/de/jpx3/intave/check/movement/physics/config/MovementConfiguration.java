@@ -138,4 +138,8 @@ public interface MovementConfiguration {
 			(isHandActive() ? "_HA" : "")
 		).trim();
 	}
+
+	default boolean anyKeypress() {
+		return forward() != 0 || strafe() != 0 || isJumping();
+	}
 }

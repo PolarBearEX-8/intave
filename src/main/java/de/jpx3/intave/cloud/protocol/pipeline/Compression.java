@@ -11,20 +11,20 @@
 
 package de.jpx3.intave.cloud.protocol.pipeline;
 
+import de.jpx3.intave.cloud.protocol.compress.CompressionAlgorithm;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.MessageToByteEncoder;
 
-import java.util.zip.Deflater;
+import java.util.Objects;
 
 public final class Compression extends MessageToByteEncoder<ByteBuf> {
-  private final byte[] buffer = new byte[8192];
-  private final Deflater deflater;
+  private final CompressionAlgorithm.Encoder encoder;
   private final int threshold;
 
-  public Compression(int threshold) {
-    this.deflater = new Deflater();
+  public Compression(int threshold, CompressionAlgorithm algorithm) {
     this.threshold = threshold;
+    this.encoder = Objects.requireNonNull(algorithm, "Compression algorithm cannot be null").newEncoder();
   }
 
   @Override
@@ -37,13 +37,16 @@ public final class Compression extends MessageToByteEncoder<ByteBuf> {
       byte[] bytes = new byte[i];
       msg.readBytes(bytes);
       writeVarInt(out, bytes.length);
-      deflater.setInput(bytes, 0, i);
-      deflater.finish();
-      while (!deflater.finished()) {
-        int compressedSize = deflater.deflate(buffer);
-        out.writeBytes(buffer, 0, compressedSize);
-      }
-      deflater.reset();
+      out.writeBytes(encoder.encode(bytes));
+    }
+  }
+
+  @Override
+  public void handlerRemoved(ChannelHandlerContext ctx) throws Exception {
+    try {
+      encoder.close();
+    } finally {
+      super.handlerRemoved(ctx);
     }
   }
 

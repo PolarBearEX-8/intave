@@ -405,7 +405,7 @@ final class FallbackUser implements User {
   }
 
   @Override
-  public void sendCloudPacket(LongFunction<? extends Packet<Serverbound>> packetGenerator) {
+  public void transmitCloudPacket(LongFunction<? extends Packet<Serverbound>> packetGenerator) {
 
   }
 

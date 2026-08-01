@@ -594,8 +594,8 @@ public interface User {
     // materialize on this thread
     JsonObject json = report.toJson();
     // transmission on other threads
-    sendCloudPacket(value -> new ServerboundReport(value, json));
+    transmitCloudPacket(value -> new ServerboundReport(value, json));
   }
 
-  void sendCloudPacket(LongFunction<? extends Packet<Serverbound>> packetGenerator);
+  void transmitCloudPacket(LongFunction<? extends Packet<Serverbound>> packetGenerator);
 }

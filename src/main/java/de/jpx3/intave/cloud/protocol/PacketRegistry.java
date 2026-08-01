@@ -53,6 +53,7 @@ public final class PacketRegistry {
     registerServerbound(ServerboundPlayerLogin.class);
     registerServerbound(ServerboundPlayerLogout.class);
     registerServerbound(ServerboundKeepAlive.class);
+    registerServerbound(ServerboundPlaytime.class);
   }
   
   private static void registerClientbound(Class<? extends Packet<?>> packetClass) {
