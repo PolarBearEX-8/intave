@@ -110,7 +110,7 @@ public final class MiscBukkitEvents extends Module {
     boolean problematic = false;
     if (ItemProperties.isSwordItem(item) && !ViaVersionAdapter.ignoreBlocking(user.player())) {
       problematic = true;
-    } else if (ItemProperties.isBow(type) || ItemProperties.foodConsumable(player, type)) {
+    } else if (ItemProperties.isBow(type) || ItemProperties.foodConsumable(user, type)) {
       problematic = true;
     }
     if (problematic) {

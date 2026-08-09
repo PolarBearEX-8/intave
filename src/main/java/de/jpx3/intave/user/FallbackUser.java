@@ -18,6 +18,8 @@ import de.jpx3.intave.block.cache.BlockCache;
 import de.jpx3.intave.block.cache.BlockCaches;
 import de.jpx3.intave.block.fluid.FluidFlow;
 import de.jpx3.intave.block.fluid.Fluids;
+import de.jpx3.intave.block.inside.BlockInsideCheck;
+import de.jpx3.intave.block.inside.BlockInsideChecks;
 import de.jpx3.intave.check.movement.physics.environment.Pose;
 import de.jpx3.intave.cloud.protocol.Packet;
 import de.jpx3.intave.cloud.protocol.listener.Serverbound;
@@ -43,6 +45,7 @@ import de.jpx3.intave.user.storage.Storages;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
 
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.function.Consumer;
@@ -56,6 +59,7 @@ final class FallbackUser implements User {
   private final Collider collider;
   private final FluidFlow fluidFlow;
   private final SimpleCollider simpleCollider;
+  private final List<BlockInsideCheck> blockInsideChecks;
   private final Map<Pose, HitboxSize> poseSizes;
   private final BlockCache blockStateAccess;
 
@@ -71,6 +75,7 @@ final class FallbackUser implements User {
     this.collider = Colliders.suitableComplexColliderProcessorFor(this);
     this.fluidFlow = Fluids.suitableFluidflowFor(this);
     this.simpleCollider = Colliders.suitableSimpleColliderProcessorFor(this);
+    this.blockInsideChecks = BlockInsideChecks.suitableFor(this);
     this.poseSizes = Pose.AT_LEAST_1_8_POSE;
     this.metadata.setup();
   }
@@ -218,6 +223,11 @@ final class FallbackUser implements User {
   @Override
   public SimpleCollider simplifiedCollider() {
     return simpleCollider;
+  }
+
+  @Override
+  public List<BlockInsideCheck> blockInsideChecks() {
+    return blockInsideChecks;
   }
 
   @Override

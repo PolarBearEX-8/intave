@@ -359,9 +359,15 @@ val mcpRebornClientConfigs = mapOf(
   mcpClient("1.20.2", "6520faec73a73bc86912951194878f16b2bdc35a", "20230921.100330", mcpJvm17),
   mcpClient("1.20.4", "6520faec73a73bc86912951194878f16b2bdc35a", "20231207.112700", mcpJvm17),
   mcpClient("1.21.1", "f862df254fc3b29b0404ddbd97ee5ee94d92b7b6", "20240808.132146", mcpJvm21),
+  mcpClient("1.21.2", "f862df254fc3b29b0404ddbd97ee5ee94d92b7b6", "20241025.104818", mcpJvm21),
   mcpClient("1.21.3", "f862df254fc3b29b0404ddbd97ee5ee94d92b7b6", "20241025.112443", mcpJvm21),
   mcpClient("1.21.4", "f862df254fc3b29b0404ddbd97ee5ee94d92b7b6", "20241203.143248", mcpJvm21),
+  mcpClient("1.21.5", "870a6f02c0edc70a94646d6799a2e9f5fc825ac6", "20250325.155543", mcpJvm21),
+  mcpClient("1.21.6", "887cf0bcff3b7d8d5384b99d45611de25d3780f8", "20250618.020446", mcpJvm21),
   mcpClient("1.21.7", "7f2d312ff0de57d4404667f42e765fd9460749c2", "20250630.104312", mcpJvm21),
+  mcpClient("1.21.8", "763bd65d34646a1b9625f5b9705aa7aad2ba2688", "20250717.105350", mcpJvm21),
+  mcpClient("1.21.9", "d38cf27335ab04f8585d0c9a5e09f9fdce0be999", "20250930.103108", mcpJvm21),
+  mcpClient("1.21.10", "fe0756535e9b317dcc77a4101cefa181d3f20977", "20251007.101210", mcpJvm21),
   mcpClient("1.21.11", "96335c336964e51c7c4392afb33790b045630078", "20251209.095502", mcpJvm21),
   mcpClient("26.1.2", "84820b4daefaf79ec6238840e4be9fb736196398", "20260409.101008", mcpJvm25),
   mcpClient("26.2", "727d72ffc66bcdf1a8c16ee92b120db2eaa46e26", "20260616.103818", mcpJvm25),
@@ -390,7 +396,7 @@ run {
   tasks.register("build_all_clients") {
     group = simpleName
     description = "Builds every explicitly configured MCP-Reborn client"
-    dependsOn(clientVersions.map { "build_${it}_client" })
+    dependsOn(mcpRebornClientConfigs.keys.map { "build_${it}_client" })
   }
 }
 
