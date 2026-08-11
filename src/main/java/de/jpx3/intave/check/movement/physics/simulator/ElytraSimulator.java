@@ -88,15 +88,24 @@ final class ElytraSimulator extends BaseSimulator {
 
   @Override
   public Motion simulateAfterTick(User user, SimulationEnvironment environment, MovementConfiguration configuration, Position position, Motion motion) {
-//    if (environment.simulationResult().onGround()) {
-//      if (user.meta().movement().elytraFlying) {
-//        user.meta().movement().elytraFlying = false;
-//        if (IntaveControl.DEBUG_ELYTRA) {
-//          user.player().sendMessage(ChatColor.RED + "Deactivated elytra flying because the player is on the ground");
-//        }
-//      }
-//    }
-    return super.simulateAfterTick(user, environment, configuration, position, motion);
+    Motion afterTickMotion = super.simulateAfterTick(user, environment, configuration, position, motion);
+    if (user.meta().protocol().fireworkBoostTicksAfterPlayer()
+      && environment.shouldHaveFallFlyingPose()) {
+      applyAttachedFireworkBoosts(
+        afterTickMotion,
+        environment.lookVector(),
+        environment.activeFireworkRockets()
+      );
+    }
+    return afterTickMotion;
+  }
+
+  void applyAttachedFireworkBoosts(Motion motion, Vector lookVector, int rocketCount) {
+    for (int rocket = 0; rocket < rocketCount; rocket++) {
+      motion.motionX += lookVector.getX() * 0.1D + (lookVector.getX() * 1.5D - motion.motionX) * 0.5D;
+      motion.motionY += lookVector.getY() * 0.1D + (lookVector.getY() * 1.5D - motion.motionY) * 0.5D;
+      motion.motionZ += lookVector.getZ() * 0.1D + (lookVector.getZ() * 1.5D - motion.motionZ) * 0.5D;
+    }
   }
 
   @Override

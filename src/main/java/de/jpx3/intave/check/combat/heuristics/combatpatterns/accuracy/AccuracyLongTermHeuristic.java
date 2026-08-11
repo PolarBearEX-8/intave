@@ -1,3 +1,14 @@
+/*
+ * Copyright 2026 Intave
+ *
+ * This software is licensed under the PolyForm Perimeter License 1.0.0.
+ * You may use this software for any purpose, except for providing to
+ * others any product that competes with the software.
+ *
+ * A copy of the license is available at:
+ *   https://polyformproject.org/licenses/perimeter/1.0.0/
+ */
+
 package de.jpx3.intave.check.combat.heuristics.combatpatterns.accuracy;
 
 import com.comphenix.protocol.PacketType;
@@ -58,7 +69,11 @@ public final class AccuracyLongTermHeuristic extends ClassicHeuristic<AccuracyLo
 //        Synchronizer.synchronize(() -> player.sendMessage(String.valueOf(failRate)));
         if (heuristicMeta.attacks > 80) {
           if (failRate >= 0 && failRate < 3) {
-            flag(player, "player maintains high attack accuracy (failRate: " + MathHelper.formatDouble(failRate, 2) + "%)");
+            flag(
+              user,
+              "maintains high attack accuracy",
+              "fail rate: " + MathHelper.formatDouble(failRate, 2) + "%"
+            );
           }
           heuristicMeta.attacks = 0;
           heuristicMeta.swings = 0;

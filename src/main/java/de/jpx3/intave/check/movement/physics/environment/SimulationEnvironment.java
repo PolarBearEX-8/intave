@@ -555,6 +555,10 @@ public interface SimulationEnvironment {
     return 1;
   }
 
+  default int activeFireworkRockets() {
+    return 0;
+  }
+
   default int shulkerXToleranceRemaining() {
     return 0;
   }

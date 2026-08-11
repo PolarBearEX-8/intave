@@ -90,8 +90,7 @@ public final class RotationAccuracyYawHeuristic extends ClassicHeuristic<Rotatio
       && !attackData.recentlySwitchedEntity(200)
     ) {
       if (heuristicMeta.snapVL++ > 0) {
-        String description = "suspicious rotation snap (" + yawSpeed + ")";
-        flag(player, description);
+        flag(user, "suspicious rotation snap", "yaw speed: " + MathHelper.formatDouble(yawSpeed, 2));
         user.nerf(AttackNerfStrategy.CRITICALS, nerfId);
       }
     } else if (heuristicMeta.snapVL > 0) {
@@ -111,7 +110,7 @@ public final class RotationAccuracyYawHeuristic extends ClassicHeuristic<Rotatio
       heuristicMeta.followBalance = 0;
     }
     if (heuristicMeta.followBalance > 25) {
-      flag(user.player(), "follows entity movement too precisely");
+      flag(user, "follows entity movement too precisely", "");
       heuristicMeta.followBalance -= 7;
       user.nerf(AttackNerfStrategy.CRITICALS, nerfId);
     }
@@ -131,8 +130,7 @@ public final class RotationAccuracyYawHeuristic extends ClassicHeuristic<Rotatio
     int suspiciousLevel = (int) heuristicMeta.balanceYawAccuracy;
     if (suspiciousLevel > 8) {
       if (heuristicMeta.rotationAccuracyVL++ > 3) {
-        String description = "high accuracy rotation yaw vl:" + suspiciousLevel;
-        flag(user.player(), description);
+        flag(user, "maintains high yaw accuracy", "vl: " + suspiciousLevel);
         user.nerf(AttackNerfStrategy.CRITICALS, nerfId);
       }
     } else if (heuristicMeta.rotationAccuracyVL > 0) {
@@ -146,8 +144,11 @@ public final class RotationAccuracyYawHeuristic extends ClassicHeuristic<Rotatio
     if (distanceToPerfectYaw > 4.0) {
       heuristicMeta.balanceYawAccuracyOther = 0;
     } else if (heuristicMeta.balanceYawAccuracyOther++ > 50) {
-      String description = "keeps high yaw accuracy in " + (int) heuristicMeta.balanceYawAccuracyOther + " rotations";
-      flag(user.player(), description);
+      flag(
+        user,
+        "maintains high yaw accuracy",
+        (int) heuristicMeta.balanceYawAccuracyOther + " rotations"
+      );
       heuristicMeta.balanceYawAccuracyOther = 0;
     }
   }
@@ -175,7 +176,7 @@ public final class RotationAccuracyYawHeuristic extends ClassicHeuristic<Rotatio
       double increase = MathHelper.minmax(-0.2, (1 - deviation) * 4, 4);
       heuristicMeta.bitBoxCornerBalance = (int) MathHelper.minmax(0, heuristicMeta.bitBoxCornerBalance + increase, 100);
       if (heuristicMeta.bitBoxCornerBalance > 30) {
-        flag(user.player(), "high accuracy rotation yaw on hit-box corners");
+        flag(user, "maintains high yaw accuracy on hitbox corners", "");
         heuristicMeta.bitBoxCornerBalance -= 20;
         user.nerf(DMG_LIGHT, nerfId);
       }
@@ -203,13 +204,15 @@ public final class RotationAccuracyYawHeuristic extends ClassicHeuristic<Rotatio
       double averageRatio = yawAverage / averageOf(angleData);
       double maxRatio = maxDistanceToPerfectYaw / yawAverage;
       if (maxRatio < 2 && maxDistanceToPerfectYaw < 30) {
-//        String descriptor = "rotated suspiciously (" + MathHelper.formatDouble(maxRatio, 4) + " / " + MathHelper.formatDouble(maxDistanceToPerfectYaw, 4) + ")";
-        String descriptor = SibylCensor.thisPlease("rotated suspiciously (%s / %s)", MathHelper.formatDouble(maxRatio, 4), MathHelper.formatDouble(maxDistanceToPerfectYaw, 4));
-        flag(user.player(), descriptor);
+        String details = SibylCensor.thisPlease(
+          "ratio: %s, maximum distance: %s",
+          MathHelper.formatDouble(maxRatio, 4),
+          MathHelper.formatDouble(maxDistanceToPerfectYaw, 4)
+        );
+        flag(user, "rotated suspiciously", details);
       }
       if (yawAverage >= 3.5 && maxDistanceToPerfectYaw <= 12.5 && averageRatio > 1) {
-        String descriptor = "precise rotation yaw (" + MathHelper.formatDouble(yawAverage, 4) + ")";
-        flag(user.player(), descriptor);
+        flag(user, "maintains precise yaw rotations", "average: " + MathHelper.formatDouble(yawAverage, 4));
       }
       heuristicMeta.distancesToPerfectYaw.clear();
       heuristicMeta.yawSpeeds.clear();

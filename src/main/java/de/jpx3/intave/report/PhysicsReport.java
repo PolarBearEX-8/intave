@@ -187,6 +187,7 @@ public final class PhysicsReport implements Report {
     characteristics.addProperty("frictionMaterial", movement.frictionMaterial().name());
     characteristics.addProperty("previousFrictionMaterial", movement.previousFrictionMaterial().name());
     characteristics.addProperty("fireworkRocketsPower", movement.fireworkRocketsPower());
+    characteristics.addProperty("activeFireworkRockets", movement.activeFireworkRockets());
     characteristics.addProperty("highestLocalRiptideLevel", movement.highestLocalRiptideLevel());
     characteristics.addProperty("onGroundWithRiptide", movement.onGroundWithRiptide());
     json.add("characteristics", characteristics);

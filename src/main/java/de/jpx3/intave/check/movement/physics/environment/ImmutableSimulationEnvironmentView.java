@@ -719,6 +719,11 @@ public final class ImmutableSimulationEnvironmentView implements SimulationEnvir
 	}
 
 	@Override
+	public int activeFireworkRockets() {
+		return delegate.activeFireworkRockets();
+	}
+
+	@Override
 	public int shulkerXToleranceRemaining() {
 		return delegate.shulkerXToleranceRemaining();
 	}

@@ -68,7 +68,6 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
-import static de.jpx3.intave.check.movement.physics.environment.MoveMetric.FIREWORK_ROCKETS;
 import static de.jpx3.intave.check.movement.physics.environment.MoveMetric.TELEPORT;
 import static de.jpx3.intave.module.feedback.FeedbackOptions.*;
 import static de.jpx3.intave.module.linker.packet.PacketId.Client.*;
@@ -415,13 +414,13 @@ public final class EntityTracker extends Module {
     },
     ignoreCancelled = false
   )
-  public void receiveEntityDestroy(Player player, EntityIterable iterable) {
+  public void receiveEntityDestroy(PacketEvent event, Player player, EntityIterable iterable) {
     iterable.forEach(entityId ->
-      enterEntityDestroy(player, entityId)
+      enterEntityDestroy(event, player, entityId)
     );
   }
 
-  private void enterEntityDestroy(Player player, int entityID) {
+  private void enterEntityDestroy(PacketEvent event, Player player, int entityID) {
     // Entity destroy packets are NEVER to be synchronized
     /*
     Important: When the destroy entity packet is synchronised the spawn entity packet needs also be synchronized because:
@@ -433,10 +432,10 @@ public final class EntityTracker extends Module {
     if (connection.duplicatedEntityIds.contains(entityID)) {
       return;
     }
-    processEntityDestroy(player, entityID);
+    processEntityDestroy(event, player, entityID);
   }
 
-  private void processEntityDestroy(Player player, int entityId) {
+  private void processEntityDestroy(PacketEvent event, Player player, int entityId) {
     User user = UserRepository.userOf(player);
     AttackMetadata attackData = user.meta().attack();
     ConnectionMetadata connection = user.meta().connection();
@@ -445,6 +444,12 @@ public final class EntityTracker extends Module {
     Entity entity = connection.entityBy(entityId);//synchronizedEntityMap.get(entityId);
     if (entity != null && movementData.ridingEntity() == entity) {
       movementData.dismountRidingEntity("Entity Destroy");
+    }
+    if (entity != null && isFireworkRocket(entity.typeData())
+      && movementData.beginFireworkRocketDetachment(entityId)) {
+      user.packetTickFeedback(event, () ->
+        movementData.confirmFireworkRocketDetachment(entityId)
+      );
     }
 
     if (entity != null && entity.duplicationId != 0) {
@@ -1046,12 +1051,12 @@ public final class EntityTracker extends Module {
     }
 
     boolean isLivingEntity = entity.typeData().isLivingEntity();
-    boolean isFireworkRocket = type.name() != null && type.name().contains("Firework");
+    boolean isFireworkRocket = isFireworkRocket(type);
     int entityTypeId = type.typeId();
 
     // Firework
     if (isFireworkRocket) {
-      handleFirework(player, reader);
+      handleFirework(event, player, entityId, reader);
     } else if (isLivingEntity) {
       // Health
       processHealthMetadata(player, entity, reader);
@@ -1065,18 +1070,25 @@ public final class EntityTracker extends Module {
     reader.release();
   }
 
-  private void handleFirework(Player player, EntityMetadataReader reader) {
+  private static boolean isFireworkRocket(EntityTypeData type) {
+    return type != null && type.name() != null && type.name().contains("Firework");
+  }
+
+  private void handleFirework(PacketEvent event, Player player, int fireworkEntityId, EntityMetadataReader reader) {
     if (!MinecraftVersions.VER1_11_0.atOrAbove()) {
       return;
     }
     if (MinecraftVersions.VER1_14_0.atOrAbove()) {
-      processFireworkModern(player, reader);
+      processFireworkModern(event, player, fireworkEntityId, reader);
     } else {
-      processFireworkLegacy(player, reader);
+      processFireworkLegacy(event, player, fireworkEntityId, reader);
     }
   }
 
-  private void processFireworkLegacy(Player player, EntityMetadataReader reader) {
+  private void processFireworkLegacy(
+    PacketEvent event, Player player,
+    int fireworkEntityId, EntityMetadataReader reader
+  ) {
     User user = UserRepository.userOf(player);
     Object value = reader.fetchRaw(7);
     if (!(value instanceof Integer)) {
@@ -1102,14 +1114,17 @@ public final class EntityTracker extends Module {
           power = Math.max(fireworkMeta.getPower(), 1);
         }
       }
-      movement.activeTick(FIREWORK_ROCKETS);
       movement.fireworkRocketsPower = power;
+      synchronizeFireworkAttachment(event, user, movement, fireworkEntityId);
     }
   }
 
   private static final int MODERN_ENTITY_ID_ACCESS_INDEX = MinecraftVersions.VER1_17_0.atOrAbove() ? 9 : 8;
 
-  private void processFireworkModern(Player player, EntityMetadataReader reader) {
+  private void processFireworkModern(
+    PacketEvent event, Player player,
+    int fireworkEntityId, EntityMetadataReader reader
+  ) {
     User user = UserRepository.userOf(player);
     Object value = reader.fetchRaw(MODERN_ENTITY_ID_ACCESS_INDEX);
     if (!(value instanceof OptionalInt)) {
@@ -1139,8 +1154,19 @@ public final class EntityTracker extends Module {
           power = Math.max(fireworkMeta.getPower(), 1);
         }
       }
-      movement.activeTick(FIREWORK_ROCKETS);
       movement.fireworkRocketsPower = power;
+      synchronizeFireworkAttachment(event, user, movement, fireworkEntityId);
+    }
+  }
+
+  private void synchronizeFireworkAttachment(
+    PacketEvent event, User user,
+    MovementMetadata movement, int fireworkEntityId
+  ) {
+    if (movement.beginFireworkRocketAttachment(fireworkEntityId)) {
+      user.packetTickFeedback(event, () ->
+        movement.confirmFireworkRocketAttachment(fireworkEntityId)
+      );
     }
   }
 

@@ -930,6 +930,11 @@ public final class MutableSimulationEnvironmentView implements SimulationEnviron
   }
 
   @Override
+  public int activeFireworkRockets() {
+    return delegate.activeFireworkRockets();
+  }
+
+  @Override
   public int shulkerXToleranceRemaining() {
     return delegate.shulkerXToleranceRemaining();
   }

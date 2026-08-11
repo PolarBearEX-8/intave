@@ -64,7 +64,7 @@ import java.util.stream.Stream;
 import static de.jpx3.intave.check.movement.physics.environment.MoveMetric.*;
 import static de.jpx3.intave.check.movement.physics.search.PostTickMotionType.SENT_OFFSET_MOTION;
 import static de.jpx3.intave.math.MathHelper.formatDouble;
-import static de.jpx3.intave.user.meta.ProtocolMetadata.VER_1_21_3;
+import static de.jpx3.intave.user.meta.ProtocolMetadata.VER_1_21_2;
 import static org.junit.jupiter.api.Assertions.*;
 
 final class MovementRecordingPhysicsTests {
@@ -101,7 +101,7 @@ final class MovementRecordingPhysicsTests {
 	@Test
 	void recordedGlidingStateSelectsElytra() {
 		MovementRecording recording = MovementRecording.create(
-			VER_1_21_3,
+			VER_1_21_2,
 			MinecraftVersions.VER1_21_4
 		);
 		Position position = new Position(0, 50, 0);

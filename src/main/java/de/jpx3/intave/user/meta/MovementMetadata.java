@@ -235,6 +235,8 @@ public final class MovementMetadata implements SimulationEnvironment {
 
   private final Map<MoveMetric, Integer> activeTracker = new EnumMap<>(MoveMetric.class);
   private final Map<MoveMetric, Integer> pastTracker = new EnumMap<>(MoveMetric.class);
+  private final Set<Integer> observedAttachedFireworkRockets = new HashSet<>();
+  private final Set<Integer> clientAttachedFireworkRockets = new HashSet<>();
 
   public final Long2LongOpenHashMap branchFrequency = new Long2LongOpenHashMap();
   public long branchFrequencyTrimCounter = 0;
@@ -1225,6 +1227,31 @@ public final class MovementMetadata implements SimulationEnvironment {
   @Override
   public int fireworkRocketsPower() {
     return fireworkRocketsPower;
+  }
+
+  @Override
+  public int activeFireworkRockets() {
+    return clientAttachedFireworkRockets.size();
+  }
+
+  public boolean beginFireworkRocketAttachment(int entityId) {
+    if (observedAttachedFireworkRockets.add(entityId)) {
+      activeTick(FIREWORK_ROCKETS);
+      return true;
+    }
+    return false;
+  }
+
+  public void confirmFireworkRocketAttachment(int entityId) {
+    clientAttachedFireworkRockets.add(entityId);
+  }
+
+  public boolean beginFireworkRocketDetachment(int entityId) {
+    return observedAttachedFireworkRockets.remove(entityId);
+  }
+
+  public void confirmFireworkRocketDetachment(int entityId) {
+    clientAttachedFireworkRockets.remove(entityId);
   }
 
   @Override

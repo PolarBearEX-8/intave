@@ -99,8 +99,7 @@ public final class BlockingHeuristic extends ClassicHeuristic<BlockingHeuristic.
 
         int ticksBetweenBlockAndUnblock = meta.ticksBetweenBlockAndUnblock;
         if (ticksBetweenBlockAndUnblock == 0) {
-          String description = "unblocked too quickly (" + ticksBetweenBlockAndUnblock + ")";
-          flag(player, description);
+          flag(user, "unblocked too quickly", ticksBetweenBlockAndUnblock + " ticks");
           //dmc6
           user.nerf(AttackNerfStrategy.BLOCKING, "block:speed");
           punishmentData.timeLastBlockCancel = System.currentTimeMillis();
@@ -113,8 +112,8 @@ public final class BlockingHeuristic extends ClassicHeuristic<BlockingHeuristic.
       boolean sword = itemInHand != null && itemInHand.getType().name().endsWith("_SWORD");
 
       if (meta.releasedItemAfterClientTick) {
-        String description = "sent multiple blocking interactions per tick (" + (itemInHand == null ? "null" : itemInHand.getType()) + ")";
-        flag(player, description);
+        String item = itemInHand == null ? "null" : itemInHand.getType().toString();
+        flag(user, "sent multiple blocking interactions per tick", "item: " + item);
         user.nerf(AttackNerfStrategy.BLOCKING, "block:multiple");
       }
 
@@ -130,8 +129,7 @@ public final class BlockingHeuristic extends ClassicHeuristic<BlockingHeuristic.
         if (clientTicksBetweenBlockingToggle == 0 && meta.acaBlockingVL < 20) {
           meta.acaBlockingVL++;
           if (meta.acaBlockingVL > 2) {
-            String description = "sent too few packets between block-toggle packets (vl: " + meta.acaBlockingVL + ")";
-            flag(player, description);
+            flag(user, "sent too few packets between block-toggle packets", "vl: " + meta.acaBlockingVL);
             user.nerf(AttackNerfStrategy.BLOCKING, "block:packets");
           }
         } else if (meta.acaBlockingVL > 1) {
@@ -164,9 +162,9 @@ public final class BlockingHeuristic extends ClassicHeuristic<BlockingHeuristic.
     if (!movementData.receivedFlyingPacketIn(2) || clientData.protocolVersion() < VER_1_9) {
       if (meta.heldItemOperations > 0) {
         if (meta.blocksPlacedThisTick == 0 || meta.heldItemOperations > 2) {
-          String description = "sent too many item operations (operations: " + meta.heldItemOperations + ")";
-          description += " (version " + user.meta().protocol().versionString() + ")";
-          flag(player, description);
+          String details = "operations: " + meta.heldItemOperations
+            + ", version: " + clientData.versionString();
+          flag(user, "sent too many item operations", details);
           meta.unsendPackets.clear();
         }
       }

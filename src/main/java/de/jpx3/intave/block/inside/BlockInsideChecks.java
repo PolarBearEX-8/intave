@@ -75,7 +75,7 @@ public final class BlockInsideChecks {
 			return Collections.singletonList(V21_5);
 		} else if (protocolVersion >= ProtocolMetadata.VER_1_21_4) {
 			return Collections.singletonList(V21_4);
-		} else if (protocolVersion >= ProtocolMetadata.VER_1_21_3) {
+		} else if (protocolVersion >= ProtocolMetadata.VER_1_21_2) {
 			return Collections.singletonList(V21_2);
 		}
 		return Collections.singletonList(V21);

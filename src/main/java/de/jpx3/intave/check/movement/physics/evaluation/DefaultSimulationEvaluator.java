@@ -105,11 +105,13 @@ public final class DefaultSimulationEvaluator implements SimulationEvaluator {
         tags.add(EvaluationTag.RIPTIDE);
       }
 
-      // Firework
-      if (movement.ticksPast(FIREWORK_ROCKETS) < 10 * movement.fireworkRocketsPower()) {
+      // Before 1.17, fireworks are weird
+      if (!protocol.fireworkBoostTicksAfterPlayer()
+        && movement.ticksPast(FIREWORK_ROCKETS) < 10 * movement.fireworkRocketsPower()) {
         motionYTolerance = Math.max(motionYTolerance, 1);
         tags.add(EvaluationTag.FIREWORK);
-      } else if (movement.ticksPast(FIREWORK_ROCKETS) < 30 * movement.fireworkRocketsPower()) {
+      } else if (!protocol.fireworkBoostTicksAfterPlayer()
+        && movement.ticksPast(FIREWORK_ROCKETS) < 30 * movement.fireworkRocketsPower()) {
         motionYTolerance = Math.max(motionYTolerance, 0.75);
         tags.add(EvaluationTag.FIREWORK);
       }
@@ -442,9 +444,9 @@ public final class DefaultSimulationEvaluator implements SimulationEvaluator {
         tags.add(EvaluationTag.COLLISION);
       }
 
-      // Firework
-      if (movement.ticksPast(FIREWORK_ROCKETS) < 30 * movement.fireworkRocketsPower()) {
-        // srsly who cares
+      // Before 1.17, client entity iteration does not preserve insertion order.
+      if (!protocol.fireworkBoostTicksAfterPlayer()
+        && movement.ticksPast(FIREWORK_ROCKETS) < 30 * movement.fireworkRocketsPower()) {
         motionXTolerance = Math.max(motionXTolerance, 3);
         motionZTolerance = Math.max(motionZTolerance, 3);
         tags.add(EvaluationTag.FIREWORK);

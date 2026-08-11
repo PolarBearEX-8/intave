@@ -22,20 +22,21 @@ import org.bukkit.entity.Player;
 import java.util.*;
 
 public final class ProtocolMetadata {
-  public static int VER_26_1_1 = 775; // 26.1.1
+  public static int VER_26_1_1 = 775; // 26.1 - 26.1.1
   public static int VER_1_21_11 = 774; // 1.21.11
   public static int VER_1_21_9 = 773; // 1.21.9 - 1.21.10
   public static int VER_1_21_7 = 772; // 1.21.7 - 1.21.8
   public static int VER_1_21_6 = 771; // 1.21.6
   public static int VER_1_21_5 = 770; // 1.21.5
   public static int VER_1_21_4 = 769; // 1.21.4
-  public static int VER_1_21_3 = 768; // 1.21.3
-  public static int VER_1_21 = 767; // 1.21
-  // final has been removed to disguise modified integer VERSION_DETAILS
-  public static int VER_1_20_2 = 764; // 1.21.2
-  public static int VER_1_20 = 763; // 1.17
+  public static int VER_1_21_2 = 768; // 1.21.2 - 1.21.3
+  public static int VER_1_21 = 767; // 1.21 - 1.21.1
+  public static int VER_1_20_5 = 766; // 1.20.5 - 1.20.6
+  public static int VER_1_20_3 = 765; // 1.20.3 - 1.20.4
+  public static int VER_1_20_2 = 764; // 1.20.2
+  public static int VER_1_20 = 763; // 1.20 - 1.20.1
   public static int VER_1_19_4 = 762; // 1.19.4
-  public static int VER_1_19_2 = 760; // 1.19.2
+  public static int VER_1_19_2 = 760; // 1.19.1 - 1.19.2
   public static int VER_1_18_2 = 758; // 1.18.2
   public static int VER_1_17 = 755; // 1.17
   public static int VER_1_16 = 735; // 1.16
@@ -44,9 +45,9 @@ public final class ProtocolMetadata {
   public static int VER_1_13_2 = 404; // 1.13.2
   public static int VER_1_13 = 393; // 1.13
   public static int VER_1_12 = 335; // 1.12
-  public static int VER_1_11_1 = 316;
-  public static int VER_1_11 = 315;
-  public static int VER_1_10 = 210;
+  public static int VER_1_11_1 = 316; // 1.11.1 - 1.11.2
+  public static int VER_1_11 = 315; // 1.11
+  public static int VER_1_10 = 210; // 1.10
   public static int VER_1_9 = 107; // 1.9
   public static int VERSION_DETAILS = 97; // secret integer for security - DO NOT MODIFY
   public static int MARKED_FOR_PLAYER_REPORT = 78; // secret integer for security - DO NOT MODIFY
@@ -226,6 +227,10 @@ public final class ProtocolMetadata {
     return protocolVersion >= VER_1_17;
   }
 
+  public boolean fireworkBoostTicksAfterPlayer() {
+    return protocolVersion >= VER_1_17;
+  }
+
   public boolean useItemMovementPacket() {
     return protocolVersion >= VER_1_17 && protocolVersion <= VER_1_21_5;
   }
@@ -291,7 +296,7 @@ public final class ProtocolMetadata {
 	}
 
   public boolean newBlockEntityIntersectionLogic() {
-    return protocolVersion >= VER_1_21_3;
+    return protocolVersion >= VER_1_21_2;
   }
 
   public boolean oppositeBlockVectorBehavior() {
@@ -307,11 +312,11 @@ public final class ProtocolMetadata {
   }
 
   public boolean sendsClientTickEnd() {
-    return protocolVersion >= VER_1_20_2 && MinecraftVersions.VER1_20_2.atOrAbove();
+    return protocolVersion >= VER_1_21_2 && MinecraftVersions.VER1_21_2.atOrAbove();
   }
 
   public boolean sendsInputs() {
-    return protocolVersion >= VER_1_21_3 && MinecraftVersions.VER1_21_3.atOrAbove();
+    return protocolVersion >= VER_1_21_2 && MinecraftVersions.VER1_21_2.atOrAbove();
   }
 
   public void setLocale(String locale) {

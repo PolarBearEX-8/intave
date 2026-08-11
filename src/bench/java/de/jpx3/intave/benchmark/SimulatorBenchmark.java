@@ -152,7 +152,7 @@ public final class SimulatorBenchmark {
 				case "waterflow" -> waterflow;
 				case "simplifiedCollider" -> simpleCollider;
 				case "blockCache" -> plane;
-				case "protocolVersion" -> ProtocolMetadata.VER_1_21_3;
+				case "protocolVersion" -> ProtocolMetadata.VER_1_21_2;
 				default -> null;
 			});
 			UserRepository.manuallyRegisterUser(player, user);

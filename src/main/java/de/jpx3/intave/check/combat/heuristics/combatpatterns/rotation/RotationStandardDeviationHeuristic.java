@@ -1,3 +1,14 @@
+/*
+ * Copyright 2026 Intave
+ *
+ * This software is licensed under the PolyForm Perimeter License 1.0.0.
+ * You may use this software for any purpose, except for providing to
+ * others any product that competes with the software.
+ *
+ * A copy of the license is available at:
+ *   https://polyformproject.org/licenses/perimeter/1.0.0/
+ */
+
 package de.jpx3.intave.check.combat.heuristics.combatpatterns.rotation;
 
 import com.comphenix.protocol.events.PacketEvent;
@@ -82,8 +93,11 @@ public final class RotationStandardDeviationHeuristic extends ClassicHeuristic<R
 
     if (standardDeviation < 1.0) {
       if (heuristicMeta.rotationBalanceYaw++ >= 2) {
-        String description = "standard deviation (yaw) (" + MathHelper.formatDouble(standardDeviation, 4) + ")";
-        flag(player, description);
+        flag(
+          user,
+          "rotation standard deviation is too low",
+          "yaw: " + MathHelper.formatDouble(standardDeviation, 4)
+        );
         heuristicMeta.rotationBalanceYaw--;
         user.nerf(AttackNerfStrategy.DMG_LIGHT, nerfId);
       }
@@ -99,8 +113,11 @@ public final class RotationStandardDeviationHeuristic extends ClassicHeuristic<R
 
     if (standardDeviation < 3.0) {
       if (heuristicMeta.rotationBalancePitch++ >= 4) {
-        String description = "standard deviation (pitch) (" + standardDeviation + ")";
-        flag(player, description);
+        flag(
+          user,
+          "rotation standard deviation is too low",
+          "pitch: " + MathHelper.formatDouble(standardDeviation, 4)
+        );
         heuristicMeta.rotationBalancePitch -= 2;
         user.nerf(AttackNerfStrategy.HT_LIGHT, nerfId);
       }

@@ -1,9 +1,21 @@
+/*
+ * Copyright 2026 Intave
+ *
+ * This software is licensed under the PolyForm Perimeter License 1.0.0.
+ * You may use this software for any purpose, except for providing to
+ * others any product that competes with the software.
+ *
+ * A copy of the license is available at:
+ *   https://polyformproject.org/licenses/perimeter/1.0.0/
+ */
+
 package de.jpx3.intave.adapter;
 
 public final class MinecraftVersions {
   public static final MinecraftVersion VER26_1_1 = new MinecraftVersion("26.1.1");
   public static final MinecraftVersion VER1_21_4 = new MinecraftVersion("1.21.4");
   public static final MinecraftVersion VER1_21_3 = new MinecraftVersion("1.21.3");
+  public static final MinecraftVersion VER1_21_2 = new MinecraftVersion("1.21.2");
   public static final MinecraftVersion VER1_21_1 = new MinecraftVersion("1.21.1");
   public static final MinecraftVersion VER1_21 = new MinecraftVersion("1.21");
   public static final MinecraftVersion VER1_20_5 = new MinecraftVersion("1.20.5");

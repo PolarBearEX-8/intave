@@ -82,7 +82,7 @@ public final class ImmutableSimulationEnvironmentCopy implements SimulationEnvir
 	private final double heightRounded, widthRounded;
 	private final Fluid interactingFluid;
 	private final WorldBorder worldBorder;
-	private final int fireworkRocketsPower;
+	private final int fireworkRocketsPower, activeFireworkRockets;
 	private final int shulkerXToleranceRemaining, shulkerYToleranceRemaining, shulkerZToleranceRemaining;
 	private final int lowestShulkerY, highestShulkerY;
 	private final int pistonMotionToleranceRemaining;
@@ -191,6 +191,7 @@ public final class ImmutableSimulationEnvironmentCopy implements SimulationEnvir
 		this.possibleMovementUpdates = new ArrayList<>(source.allTickAmbiguousUpdates());
 		this.worldBorder = source.border();
 		this.fireworkRocketsPower = source.fireworkRocketsPower();
+		this.activeFireworkRockets = source.activeFireworkRockets();
 		this.shulkerXToleranceRemaining = source.shulkerXToleranceRemaining();
 		this.shulkerYToleranceRemaining = source.shulkerYToleranceRemaining();
 		this.shulkerZToleranceRemaining = source.shulkerZToleranceRemaining();
@@ -881,6 +882,11 @@ public final class ImmutableSimulationEnvironmentCopy implements SimulationEnvir
 	@Override
 	public int fireworkRocketsPower() {
 		return fireworkRocketsPower;
+	}
+
+	@Override
+	public int activeFireworkRockets() {
+		return activeFireworkRockets;
 	}
 
 	@Override

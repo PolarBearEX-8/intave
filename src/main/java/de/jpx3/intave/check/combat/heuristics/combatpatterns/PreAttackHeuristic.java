@@ -127,8 +127,8 @@ public final class PreAttackHeuristic extends ClassicHeuristic<PreAttackHeuristi
       }
       if (meta.attacks >= 100) {
         if (meta.preAttacks < 4) {
-          String description = "attacks seem automated (" + meta.preAttacks + "f) | " + clientData.versionString();
-          flag(player, description);
+          String details = "pre-attacks: " + meta.preAttacks + ", version: " + clientData.versionString();
+          flag(user, "attacks seem automated", details);
           user.nerf(DMG_MEDIUM, nerfId);
         }
         meta.attacks = 0;

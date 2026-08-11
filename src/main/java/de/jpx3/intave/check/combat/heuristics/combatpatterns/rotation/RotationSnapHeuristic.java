@@ -176,15 +176,15 @@ public final class RotationSnapHeuristic extends ClassicHeuristic<RotationSnapHe
 
     if (snapDetected) {
       double valueOfSnap = meta.yawMotions[0];
-      String description = "rotation snap ["
+      String details = "yaw: ["
         + MathHelper.formatDouble(meta.yawMotions[1], 2)
         + "/" + MathHelper.formatDouble(meta.yawMotions[0], 2)
         + "/" + MathHelper.formatDouble(yawMotion, 2) + "]";
 
       if (meta.silentMovements[1] == KeyStates.SILENTMOVE) {
-        description += " silent";
+        details += ", movement: silent";
       } else if (meta.silentMovements[1] == KeyStates.CHANGED) {
-        description += " changed";
+        details += ", movement: changed";
       }
 
       boolean changedLookToEntity = false;
@@ -218,7 +218,7 @@ public final class RotationSnapHeuristic extends ClassicHeuristic<RotationSnapHe
 
           changedLookToEntity = (last.reach() != 10) != (raytrace.reach() != 10);
           if (changedLookToEntity) {
-            description += " lookEn";
+            details += ", look changed to entity";
           }
         }
       }
@@ -226,21 +226,20 @@ public final class RotationSnapHeuristic extends ClassicHeuristic<RotationSnapHe
       double vl = calculateViolation(valueOfSnap, changedLookToEntity, user, liteFlag);
       liteFlag = false;
 
-      handleConfidence(user, (int) vl, description);
+      handleConfidence(user, (int) vl, "rotation snapped suspiciously", details);
     }
 
     if (liteFlag) {
-      String description = "rotation snap scaffold [" + MathHelper.formatDouble(meta.yawMotions[0], 2) + "]";
+      String details = "yaw: " + MathHelper.formatDouble(meta.yawMotions[0], 2);
       int addedViolationLevel = 30;
-      handleConfidence(user, addedViolationLevel, description);
+      handleConfidence(user, addedViolationLevel, "rotation snapped suspiciously while scaffolding", details);
     }
 
     prepareNextTick(meta, yawMotion, user);
   }
 
-  private void handleConfidence(User user, int violationToAdd, String description) {
+  private void handleConfidence(User user, int violationToAdd, String message, String details) {
     RotationSnapHeuristicMeta meta = metaOf(user);
-    Player player = user.player();
 
     meta.internalViolation += violationToAdd;
 
@@ -248,12 +247,12 @@ public final class RotationSnapHeuristic extends ClassicHeuristic<RotationSnapHe
       meta.internalViolation -= 30;
 
       if (user.protocolVersion() > 47) {
-        description += " " + user.protocolVersion();
+        details += ", protocol: " + user.protocolVersion();
       }
 
-      flag(player, description);
+      flag(user, message, details);
     } else if (meta.internalViolation > 5) {
-      // flag(player, description + " (debug)");
+      // flag(user, message, details + ", debug");
     }
   }
 

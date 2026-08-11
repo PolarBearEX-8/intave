@@ -90,13 +90,17 @@ public final class PacketPlayerActionToggleHeuristic extends ClassicHeuristic<Pa
       boolean flyingPacketStream = clientData.emptyFlyingPacketsAreExplicitlySent();
       boolean checkable = flyingPacketStream || !movementData.receivedFlyingPacketIn(20);
       if (checkable) {
-        String description = sprint
-          ? "sent too many sprint toggles per tick (" + heuristicMeta.sprintTogglesInTick + ")"
-          : "sent too many sneak toggles per tick (" + heuristicMeta.sneakTogglesInTick + ")";
+        String message = sprint
+          ? "sent too many sprint toggles per tick"
+          : "sent too many sneak toggles per tick";
+        int toggleCount = sprint
+          ? heuristicMeta.sprintTogglesInTick
+          : heuristicMeta.sneakTogglesInTick;
+        String details = "toggles: " + toggleCount;
         if (!flyingPacketStream) {
-          description += " (last flying: " + movementData.ticksPast(FLYING_PACKET_ACCURATE) + ")";
+          details += ", last flying: " + movementData.ticksPast(FLYING_PACKET_ACCURATE) + " ticks ago";
         }
-        this.flag(player, description);
+        flag(user, message, details);
 
         boolean cancel = (flyingPacketStream || Hypot.fast(movementData.offsetMotionX(), movementData.offsetMotionZ()) > 0.2) && heuristicMeta.threshold++ > 3;
         if (cancel) {

@@ -1,3 +1,14 @@
+/*
+ * Copyright 2026 Intave
+ *
+ * This software is licensed under the PolyForm Perimeter License 1.0.0.
+ * You may use this software for any purpose, except for providing to
+ * others any product that competes with the software.
+ *
+ * A copy of the license is available at:
+ *   https://polyformproject.org/licenses/perimeter/1.0.0/
+ */
+
 package de.jpx3.intave.check.combat.heuristics.combatpatterns.accuracy;
 
 import com.comphenix.protocol.PacketType;
@@ -94,12 +105,11 @@ public final class AccuracyHitboxCornerHeuristic extends ClassicHeuristic<Accura
 
       if (failRate < 5 && (yawSpeedAverage > 10 || distanceAverage > 10)) {
         heuristicMeta.vl++;
-        String description = "maintains high attack accuracy whilst aiming at hitbox corners " +
-          "(fail:" + MathHelper.formatDouble(failRate, 2)
-          + "%, r:" + MathHelper.formatDouble(yawSpeedAverage, 2)
-          + ", d:" + MathHelper.formatDouble(distanceAverage, 2)
-          + ") vl:" + MathHelper.formatDouble(heuristicMeta.vl, 2);
-        flag(player, description);
+        String details = "fail: " + MathHelper.formatDouble(failRate, 2)
+          + "%, rotation: " + MathHelper.formatDouble(yawSpeedAverage, 2)
+          + ", distance: " + MathHelper.formatDouble(distanceAverage, 2)
+          + ", vl: " + MathHelper.formatDouble(heuristicMeta.vl, 2);
+        flag(user, "maintains high attack accuracy whilst aiming at hitbox corners", details);
         if (heuristicMeta.vl >= 2) {
           user.nerf(AttackNerfStrategy.DMG_MEDIUM, "13");
         }

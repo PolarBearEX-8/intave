@@ -1,11 +1,22 @@
+/*
+ * Copyright 2026 Intave
+ *
+ * This software is licensed under the PolyForm Perimeter License 1.0.0.
+ * You may use this software for any purpose, except for providing to
+ * others any product that competes with the software.
+ *
+ * A copy of the license is available at:
+ *   https://polyformproject.org/licenses/perimeter/1.0.0/
+ */
+
 package de.jpx3.intave.check.combat.heuristics;
 
 import de.jpx3.intave.check.MetaCheckPart;
 import de.jpx3.intave.check.combat.Heuristics;
 import de.jpx3.intave.module.Modules;
 import de.jpx3.intave.module.violation.Violation;
+import de.jpx3.intave.user.User;
 import de.jpx3.intave.user.meta.CheckCustomMetadata;
-import org.bukkit.entity.Player;
 
 public class ClassicHeuristic<M extends CheckCustomMetadata> extends MetaCheckPart<Heuristics, M> {
   protected final Heuristics parentCheck;
@@ -18,13 +29,17 @@ public class ClassicHeuristic<M extends CheckCustomMetadata> extends MetaCheckPa
     this.parentCheck = parentCheck;
     this.type = type;
     this.violationLevelIncrease = parentCheck.classicViolationLevelMap().getOrDefault(type, 0);
-    this.nerfId = type.verboseName();
+    this.nerfId = type.configurationName();
   }
 
-  protected void flag(Player player, String details) {
+  protected void flag(User user, String message, String details) {
+    String verboseDetails = type.displayName();
+    if (!details.isEmpty()) {
+      verboseDetails += ", " + details;
+    }
     Violation violation = Violation.builderFor(Heuristics.class)
-      .forPlayer(player).withMessage("failed " + type.verboseName())
-      .withDetails(details)
+      .forUser(user).withMessage(message)
+      .withDetails(verboseDetails)
       .withVL(violationLevelIncrease)
       .withCustomThreshold("classic.thresholds")
       .build();

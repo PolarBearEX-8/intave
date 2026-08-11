@@ -86,9 +86,8 @@ public final class NoSwingHeuristic extends ClassicHeuristic<NoSwingHeuristic.No
 
     if (meta.attacksThisTick > 0) {
       if (meta.swingsThisTick == 0) {
-        String details = "missing swing packet on attack";
         String checkName = "swing:miss";
-        flag(player, details);
+        flag(user, "missing swing packet on attack", "");
         user.nerf(AttackNerfStrategy.CANCEL, checkName);
       }
     }
