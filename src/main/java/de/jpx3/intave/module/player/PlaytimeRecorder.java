@@ -11,8 +11,8 @@
 
 package de.jpx3.intave.module.player;
 
+import ac.intave.cloud.protocol.packets.player.ServerboundPlaytime;
 import de.jpx3.intave.IntavePlugin;
-import de.jpx3.intave.cloud.protocol.packets.player.ServerboundPlaytime;
 import de.jpx3.intave.module.Module;
 import de.jpx3.intave.user.UserRepository;
 import de.jpx3.intave.user.meta.MovementMetadata;

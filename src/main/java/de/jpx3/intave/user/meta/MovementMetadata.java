@@ -101,7 +101,6 @@ public final class MovementMetadata implements SimulationEnvironment {
   public boolean acceptSneakFaults = true;
   public float rotationYaw, rotationPitch;
   public float lastRotationYaw, lastRotationPitch;
-  public long recordedMoves;
   public long invalidVehiclePositionTicks = 0;
   // Timestamps
   public long lastTimeSneaking, lastTimeJumped, lastRotation;
@@ -1254,6 +1253,28 @@ public final class MovementMetadata implements SimulationEnvironment {
     clientAttachedFireworkRockets.remove(entityId);
   }
 
+  public void restoreRecordedFireworkState(int fireworkRocketsPower, int activeFireworkRockets) {
+    this.fireworkRocketsPower = fireworkRocketsPower;
+    observedAttachedFireworkRockets.clear();
+    clientAttachedFireworkRockets.clear();
+    for (int index = 0; index < activeFireworkRockets; index++) {
+      int syntheticEntityId = Integer.MIN_VALUE + index;
+      observedAttachedFireworkRockets.add(syntheticEntityId);
+      clientAttachedFireworkRockets.add(syntheticEntityId);
+    }
+  }
+
+  /** Restores combat and item-use timing inputs that are consumed directly by movement search. */
+  public void restoreRecordedCombatState(
+    int reduceTicks,
+    int attackReduceTicksPast,
+    int entityUseTicksPast
+  ) {
+    this.reduceTicks = reduceTicks;
+    setPast(ATTACK_REDUCE, attackReduceTicksPast);
+    setPast(ENTITY_USE, entityUseTicksPast);
+  }
+
   @Override
   public int shulkerXToleranceRemaining() {
     return shulkerXToleranceRemaining;
@@ -1711,6 +1732,18 @@ public final class MovementMetadata implements SimulationEnvironment {
     if (user.receives(MessageChannel.DEBUG_MOUNTS)) {
       player.sendMessage(IntavePlugin.prefix() + "Mounting " + ridingEntity.entityName() + " " + MathHelper.formatDouble(attachMoveDistance, 4) + " blocks away");
     }
+  }
+
+  public void restoreRecordedVehicle(@Nullable Entity ridingEntity) {
+    this.vehicle = ridingEntity;
+    if (ridingEntity == null || !ridingEntity.hasTypeData()) {
+      this.vehicleCanBeRidden = false;
+      return;
+    }
+    String entityName = ridingEntity.entityName().toLowerCase(Locale.ROOT);
+    this.vehicleCanBeRidden = Arrays.asList(
+      "boat", "minecart", "pig", "horse", "camel", "llama"
+    ).stream().anyMatch(entityName::contains);
   }
 
   public void dismountRidingEntity() {

@@ -11,7 +11,8 @@
 
 package de.jpx3.intave.cloud.protocol;
 
-import de.jpx3.intave.cloud.protocol.listener.Serverbound;
+import ac.intave.cloud.protocol.AttestedPacket;
+import ac.intave.cloud.protocol.listener.Serverbound;
 
 import java.util.HashSet;
 import java.util.Set;

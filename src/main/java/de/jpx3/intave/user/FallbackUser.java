@@ -11,6 +11,8 @@
 
 package de.jpx3.intave.user;
 
+import ac.intave.cloud.protocol.Packet;
+import ac.intave.cloud.protocol.listener.Serverbound;
 import com.comphenix.protocol.events.PacketEvent;
 import de.jpx3.intave.access.UnsupportedFallbackOperationException;
 import de.jpx3.intave.access.player.trust.TrustFactor;
@@ -21,8 +23,6 @@ import de.jpx3.intave.block.fluid.Fluids;
 import de.jpx3.intave.block.inside.BlockInsideCheck;
 import de.jpx3.intave.block.inside.BlockInsideChecks;
 import de.jpx3.intave.check.movement.physics.environment.Pose;
-import de.jpx3.intave.cloud.protocol.Packet;
-import de.jpx3.intave.cloud.protocol.listener.Serverbound;
 import de.jpx3.intave.connect.customclient.CustomClientSupportConfig;
 import de.jpx3.intave.entity.size.HitboxSize;
 import de.jpx3.intave.module.actionbar.DisplayType;

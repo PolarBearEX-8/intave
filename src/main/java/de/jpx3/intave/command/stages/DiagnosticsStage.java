@@ -11,6 +11,10 @@
 
 package de.jpx3.intave.command.stages;
 
+import ac.intave.samples.event.AttackEvent;
+import ac.intave.samples.event.BlockPlaceEvent;
+import ac.intave.samples.event.EventSink;
+import ac.intave.samples.share.Classifier;
 import com.comphenix.protocol.PacketType;
 import com.comphenix.protocol.ProtocolLibrary;
 import com.comphenix.protocol.ProtocolManager;
@@ -37,12 +41,8 @@ import de.jpx3.intave.executor.Synchronizer;
 import de.jpx3.intave.math.MathHelper;
 import de.jpx3.intave.module.Modules;
 import de.jpx3.intave.module.mitigate.AttackNerfStrategy;
-import de.jpx3.intave.module.nayoro.Classifier;
 import de.jpx3.intave.module.nayoro.Nayoro;
 import de.jpx3.intave.module.nayoro.OperationalMode;
-import de.jpx3.intave.module.nayoro.event.AttackEvent;
-import de.jpx3.intave.module.nayoro.event.BlockPlaceEvent;
-import de.jpx3.intave.module.nayoro.event.sink.EventSink;
 import de.jpx3.intave.module.test.ChestLootProvider;
 import de.jpx3.intave.module.tracker.player.PacketLogging;
 import de.jpx3.intave.player.DamageModify;
@@ -261,7 +261,7 @@ public final class DiagnosticsStage extends CommandStage {
     Nayoro nayoro = Modules.nayoro();
     nayoro.pushSink(user, new EventSink() {
       @Override
-      public void visit(de.jpx3.intave.module.nayoro.event.ClickEvent event) {
+      public void visit(ac.intave.samples.event.ClickEvent event) {
         player.sendMessage("ClickEvent");
       }
 

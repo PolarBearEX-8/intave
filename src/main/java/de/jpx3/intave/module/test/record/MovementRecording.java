@@ -26,6 +26,7 @@ import de.jpx3.intave.check.movement.physics.environment.Pose;
 import de.jpx3.intave.codec.ByteBufStreamCodecs;
 import de.jpx3.intave.codec.StreamCodec;
 import de.jpx3.intave.module.test.record.action.Action;
+import de.jpx3.intave.module.test.record.action.ReceiveVelocity;
 import de.jpx3.intave.player.attribute.Attribute;
 import de.jpx3.intave.resource.Resource;
 import de.jpx3.intave.share.*;
@@ -42,48 +43,14 @@ import java.util.stream.Collectors;
 import java.util.zip.InflaterInputStream;
 
 public final class MovementRecording {
-	private static final StreamCodec<ByteBuf, ByteBuf, Map<Material, Map<Integer, BlockShape>>> COLLISION_SHAPES_CODEC =
-		ByteBufStreamCodecs.mapCodec(
-			ByteBufStreamCodecs.MATERIAL,
-			ByteBufStreamCodecs.mapCodec(
-				ByteBufStreamCodecs.INTEGER,
-				BlockShape.STREAM_CODEC
-			)
-		);
+	private static final StreamCodec<ByteBuf, ByteBuf, Map<Material, Map<Integer, BlockShape>>> COLLISION_SHAPES_CODEC = ByteBufStreamCodecs.mapCodec(ByteBufStreamCodecs.MATERIAL, ByteBufStreamCodecs.mapCodec(ByteBufStreamCodecs.INTEGER, BlockShape.STREAM_CODEC));
 
-	private static final StreamCodec<ByteBuf, ByteBuf, Map<Material, Map<Integer, Fluid>>> FLUIDS_CODEC =
-		ByteBufStreamCodecs.mapCodec(
-			ByteBufStreamCodecs.MATERIAL,
-			ByteBufStreamCodecs.mapCodec(
-				ByteBufStreamCodecs.INTEGER,
-				Fluid.STREAM_CODEC
-			)
-		);
-	private static final StreamCodec<ByteBuf, ByteBuf, Map<Material, Map<Integer, BlockVariant>>> BLOCK_VARIANTS_CODEC =
-		ByteBufStreamCodecs.mapCodec(
-			ByteBufStreamCodecs.MATERIAL,
-			ByteBufStreamCodecs.mapCodec(
-				ByteBufStreamCodecs.INTEGER,
-				BlockVariant.STREAM_CODEC
-			)
-		);
-	private static final StreamCodec<ByteBuf, ByteBuf, Map<String, Attribute>> ATTRIBUTES_CODEC =
-		ByteBufStreamCodecs.mapCodec(ByteBufStreamCodecs.STRING, Attribute.STREAM_CODEC);
-	private static final StreamCodec<ByteBuf, ByteBuf, List<Map<String, Attribute>>> FRAME_ATTRIBUTES_CODEC =
-		ByteBufStreamCodecs.listCodecOf(ATTRIBUTES_CODEC);
+	private static final StreamCodec<ByteBuf, ByteBuf, Map<Material, Map<Integer, Fluid>>> FLUIDS_CODEC = ByteBufStreamCodecs.mapCodec(ByteBufStreamCodecs.MATERIAL, ByteBufStreamCodecs.mapCodec(ByteBufStreamCodecs.INTEGER, Fluid.STREAM_CODEC));
+	private static final StreamCodec<ByteBuf, ByteBuf, Map<Material, Map<Integer, BlockVariant>>> BLOCK_VARIANTS_CODEC = ByteBufStreamCodecs.mapCodec(ByteBufStreamCodecs.MATERIAL, ByteBufStreamCodecs.mapCodec(ByteBufStreamCodecs.INTEGER, BlockVariant.STREAM_CODEC));
+	private static final StreamCodec<ByteBuf, ByteBuf, Map<String, Attribute>> ATTRIBUTES_CODEC = ByteBufStreamCodecs.mapCodec(ByteBufStreamCodecs.STRING, Attribute.STREAM_CODEC);
+	private static final StreamCodec<ByteBuf, ByteBuf, List<Map<String, Attribute>>> FRAME_ATTRIBUTES_CODEC = ByteBufStreamCodecs.listCodecOf(ATTRIBUTES_CODEC);
 
-	public static final StreamCodec<ByteBuf, ByteBuf, MovementRecording> STREAM_CODEC = ByteBufStreamCodecs
-		.smartReflectionCodecBuilder(MovementRecording.class)
-		.field("internalId", ByteBufStreamCodecs.UUID)
-		.field("clientProtocolVersion", ByteBufStreamCodecs.INTEGER, () -> 47)
-		.field("serverVersion", MinecraftVersion.STREAM_CODEC, () -> MinecraftVersions.VER1_21_4)
-		.field("frames", MoveFrame.LIST_STREAM_CODEC)
-		.field("frameAttributes", FRAME_ATTRIBUTES_CODEC, LinkedList::new)
-		.field("actions", Action.LIST_STREAM_CODEC, LinkedList::new)
-		.field("collisionShapes", COLLISION_SHAPES_CODEC, HashMap::new)
-		.field("fluids", FLUIDS_CODEC, HashMap::new)
-		.field("blockVariants", BLOCK_VARIANTS_CODEC, HashMap::new)
-		.build();
+	public static final StreamCodec<ByteBuf, ByteBuf, MovementRecording> STREAM_CODEC = ByteBufStreamCodecs.smartReflectionCodecBuilder(MovementRecording.class).field("internalId", ByteBufStreamCodecs.UUID).field("clientProtocolVersion", ByteBufStreamCodecs.INTEGER, () -> 47).field("serverVersion", MinecraftVersion.STREAM_CODEC, () -> MinecraftVersions.VER1_21_4).field("frames", MoveFrame.LIST_STREAM_CODEC).field("frameAttributes", FRAME_ATTRIBUTES_CODEC, LinkedList::new).field("actions", Action.LIST_STREAM_CODEC, LinkedList::new).field("collisionShapes", COLLISION_SHAPES_CODEC, HashMap::new).field("fluids", FLUIDS_CODEC, HashMap::new).field("blockVariants", BLOCK_VARIANTS_CODEC, HashMap::new).build();
 
 	private final UUID internalId;
 	private final int clientProtocolVersion;
@@ -92,21 +59,12 @@ public final class MovementRecording {
 	private final List<MoveFrame> frames = new LinkedList<>();
 	private final List<Map<String, Attribute>> frameAttributes = new LinkedList<>();
 	private final Map<BlockPosition, MaterialVariantStore> blocks = new HashMap<>();
+	private final Map<VelocityToken, VelocityInterval> velocities = new LinkedHashMap<>();
 	private final Map<Material, Map<Integer, BlockShape>> collisionShapes;
 	private final Map<Material, Map<Integer, Fluid>> fluids;
 	private final Map<Material, Map<Integer, BlockVariant>> blockVariants;
 
-	private MovementRecording(
-		UUID internalId,
-		int clientProtocolVersion,
-		MinecraftVersion serverVersion,
-		List<MoveFrame> frames,
-		List<Map<String, Attribute>> frameAttributes,
-		List<Action> actions,
-		Map<Material, Map<Integer, BlockShape>> collisionShapes,
-		Map<Material, Map<Integer, Fluid>> fluids,
-		Map<Material, Map<Integer, BlockVariant>> blockVariants
-	) {
+	MovementRecording(UUID internalId, int clientProtocolVersion, MinecraftVersion serverVersion, List<MoveFrame> frames, List<Map<String, Attribute>> frameAttributes, List<Action> actions, Map<Material, Map<Integer, BlockShape>> collisionShapes, Map<Material, Map<Integer, Fluid>> fluids, Map<Material, Map<Integer, BlockVariant>> blockVariants) {
 		this.internalId = Objects.requireNonNull(internalId, "internalId cannot be null");
 		this.clientProtocolVersion = clientProtocolVersion;
 		this.serverVersion = Objects.requireNonNull(serverVersion, "serverVersion cannot be null");
@@ -122,39 +80,89 @@ public final class MovementRecording {
 		frames.add(frame);
 	}
 
-	public void insertFrame(
-		BoundingBox boundingBox,
-		Input input,
-		@Nullable Position position,
-		@Nullable Rotation rotation,
-		BlockCache blockCache,
-		boolean gliding
-	) {
-		insertFrame(
-			boundingBox, input, position, rotation,
-			blockCache, Collections.emptyMap(), gliding, null
-		);
+	public void insertFrame(BoundingBox boundingBox, Input input, @Nullable Position position, @Nullable Rotation rotation, BlockCache blockCache, boolean gliding) {
+		insertFrame(boundingBox, input, position, rotation, blockCache, Collections.emptyMap(), gliding, null);
 	}
 
-	public void insertFrame(
-		BoundingBox boundingBox,
-		Input input,
-		@Nullable Position position,
-		@Nullable Rotation rotation,
-		BlockCache blockCache,
-		Map<String, Attribute> attributes,
-		boolean gliding,
-		@Nullable Pose physicalPose
-	) {
-		Map<BlockPosition, MaterialVariantStore> dirtyBlocks = insertAndDelta(
-			nearbyBlocks(blockCache, boundingBox, position)
-		);
+	public void insertFrame(BoundingBox boundingBox, Input input, @Nullable Position position, @Nullable Rotation rotation, BlockCache blockCache, Map<String, Attribute> attributes, boolean gliding, @Nullable Pose physicalPose) {
+		Map<BlockPosition, MaterialVariantStore> dirtyBlocks = insertAndDelta(nearbyBlocks(blockCache, boundingBox, position));
 		appendFrame(new MoveFrame(position, rotation, dirtyBlocks, input, gliding, physicalPose));
+		frameAttributes.add(new HashMap<>(attributes));
+	}
+
+	public void insertFrame(BoundingBox boundingBox, Input input, @Nullable Position position, @Nullable Rotation rotation, BlockCache blockCache, Map<String, Attribute> attributes, boolean gliding, @Nullable Pose physicalPose, MovementFrameState frameState) {
+		Map<BlockPosition, MaterialVariantStore> dirtyBlocks = insertAndDelta(nearbyBlocks(blockCache, boundingBox, position));
+		appendFrame(new MoveFrame(
+			position, rotation, dirtyBlocks, input, gliding, physicalPose,
+			Objects.requireNonNull(frameState, "frameState")
+		));
 		frameAttributes.add(new HashMap<>(attributes));
 	}
 
 	public void insertAction(Action action) {
 		actions.add(action);
+	}
+
+	/**
+	 * Starts a velocity acknowledgement interval at the current recording tick.
+	 *
+	 * <p>The interval remains recording-native until the recording is detached for serialization.
+	 * This lets a replay window carry an acknowledgement across a segment boundary without a
+	 * second timeline in the rolling recorder.
+	 */
+	public synchronized VelocityToken beginVelocity(Motion motion) {
+		VelocityToken token = new VelocityToken();
+		velocities.put(token, new VelocityInterval(motion.copy(), ticks()));
+		return token;
+	}
+
+	/**
+	 * Completes a native velocity interval using the recorder's historical inclusive end tick.
+	 */
+	public synchronized void completeVelocity(@Nullable VelocityToken token) {
+		if (token == null) {
+			return;
+		}
+		VelocityInterval velocity = velocities.get(token);
+		if (velocity != null && velocity.endExclusive == null) {
+			velocity.endExclusive = ticks() + 1;
+		}
+	}
+
+	/**
+	 * Converts native velocity intervals into serialized PTR actions.
+	 *
+	 * <p>Call this only after the recording has been detached from live capture. Open intervals are
+	 * clipped to the final recorded frame; completed intervals retain the existing inclusive-end
+	 * behavior where that tick exists in this recording.
+	 */
+	public synchronized void materializeVelocities() {
+		long recordingEnd = ticks();
+		for (VelocityInterval velocity : velocities.values()) {
+			long endExclusive = velocity.endExclusive == null ? recordingEnd : Math.min(velocity.endExclusive, recordingEnd);
+			long startInclusive = Math.max(0, velocity.startInclusive);
+			if (startInclusive >= endExclusive) {
+				continue;
+			}
+			actions.add(new ReceiveVelocity(velocity.motion.copy(), TickRange.betweenExclusive(startInclusive, endExclusive)));
+		}
+		velocities.clear();
+	}
+
+	/**
+	 * Copies and rebases native intervals when a live recording is reduced to a frame window.
+	 */
+	synchronized void inheritVelocities(MovementRecording source, long fromInclusive) {
+		for (Map.Entry<VelocityToken, VelocityInterval> entry : source.velocities.entrySet()) {
+			VelocityInterval sourceVelocity = entry.getValue();
+			Long sourceEnd = sourceVelocity.endExclusive;
+			if (sourceEnd != null && sourceEnd <= fromInclusive) {
+				continue;
+			}
+			long startInclusive = Math.max(sourceVelocity.startInclusive, fromInclusive) - fromInclusive;
+			Long endExclusive = sourceEnd == null ? null : sourceEnd - fromInclusive;
+			velocities.put(entry.getKey(), new VelocityInterval(sourceVelocity.motion.copy(), startInclusive, endExclusive));
+		}
 	}
 
 	public long ticks() {
@@ -182,24 +190,28 @@ public final class MovementRecording {
 	public void clear() {
 		frames.clear();
 		frameAttributes.clear();
+		actions.clear();
 		blocks.clear();
+		velocities.clear();
+		collisionShapes.clear();
+		fluids.clear();
+		blockVariants.clear();
 	}
 
-	private Map<BlockPosition, MaterialVariantStore> nearbyBlocks(
-		BlockCache blockCache,
-		BoundingBox boundingBox,
-		@Nullable Position position
-	) {
+	void seedBlocks(Map<BlockPosition, MaterialVariantStore> blockState) {
+		blocks.clear();
+		blocks.putAll(blockState);
+	}
+
+	private Map<BlockPosition, MaterialVariantStore> nearbyBlocks(BlockCache blockCache, BoundingBox boundingBox, @Nullable Position position) {
 		if (position == null) {
 			return Collections.emptyMap();
 		}
 
 		Map<BlockPosition, MaterialVariantStore> nearbyBlocks = new HashMap<>();
 		List<BlockPosition> nearbyPositions = Collision.collectRasterizedCollisions(
-			boundingBox.grow(2),
-			MutableBlockPosition::toBlockPosition,
-			blockPosition -> false,
-			Collectors.toList()
+			boundingBox.grow(6), MutableBlockPosition::toBlockPosition,
+			blockPosition -> false, Collectors.toList()
 		);
 		for (BlockPosition blockPosition : nearbyPositions) {
 			Material type = blockCache.typeAt(blockPosition);
@@ -209,9 +221,7 @@ public final class MovementRecording {
 			// check if collision shapes has the block
 			if (!collisionShapes.containsKey(type) || !collisionShapes.get(type).containsKey(index)) {
 				BlockShape shape = blockCache.collisionShapeAt(blockPosition);
-				collisionShapes.computeIfAbsent(type, k -> new HashMap<>()).put(index, shape.normalized(
-					blockPosition
-				));
+				collisionShapes.computeIfAbsent(type, k -> new HashMap<>()).put(index, shape.normalized(blockPosition));
 			}
 			if (!fluids.containsKey(type) || !fluids.get(type).containsKey(index)) {
 				Fluid fluid = Fluids.fluidStateOf(type, index);
@@ -224,9 +234,7 @@ public final class MovementRecording {
 		return nearbyBlocks;
 	}
 
-	private Map<BlockPosition, MaterialVariantStore> insertAndDelta(
-		Map<BlockPosition, MaterialVariantStore> nearbyBlocks
-	) {
+	private Map<BlockPosition, MaterialVariantStore> insertAndDelta(Map<BlockPosition, MaterialVariantStore> nearbyBlocks) {
 		Map<BlockPosition, MaterialVariantStore> delta = new HashMap<>();
 		for (Map.Entry<BlockPosition, MaterialVariantStore> entry : nearbyBlocks.entrySet()) {
 			BlockPosition pos = entry.getKey();
@@ -280,8 +288,7 @@ public final class MovementRecording {
 	}
 
 	public void recordBlockVariant(Material type, int variantIndex, BlockVariant variant) {
-		blockVariants.computeIfAbsent(type, key -> new HashMap<>())
-			.computeIfAbsent(variantIndex, key -> variant.copy());
+		blockVariants.computeIfAbsent(type, key -> new HashMap<>()).computeIfAbsent(variantIndex, key -> variant.copy());
 	}
 
 	public @Nullable BlockVariant blockVariant(Material type, int variantIndex) {
@@ -294,16 +301,7 @@ public final class MovementRecording {
 
 	@Override
 	public String toString() {
-		return "MovementRecording{" +
-			"internalId=" + internalId +
-			", clientProtocolVersion=" + clientProtocolVersion +
-			", serverVersion='" + serverVersion + '\'' +
-			", frames=" + frames +
-			", actions=" + actions +
-			", collisionShapes=" + collisionShapes +
-			", fluids=" + fluids +
-			", blockVariants=" + blockVariants +
-			'}';
+		return "MovementRecording{" + "internalId=" + internalId + ", clientProtocolVersion=" + clientProtocolVersion + ", serverVersion='" + serverVersion + '\'' + ", frames=" + frames + ", actions=" + actions + ", collisionShapes=" + collisionShapes + ", fluids=" + fluids + ", blockVariants=" + blockVariants + '}';
 	}
 
 	@Override
@@ -311,15 +309,7 @@ public final class MovementRecording {
 		if (this == obj) return true;
 		if (obj == null || getClass() != obj.getClass()) return false;
 		MovementRecording that = (MovementRecording) obj;
-		return Objects.equals(internalId, that.internalId) &&
-			clientProtocolVersion == that.clientProtocolVersion &&
-			Objects.equals(serverVersion, that.serverVersion) &&
-			Objects.equals(frames, that.frames) &&
-			frameAttributesEqual(frameAttributes, that.frameAttributes) &&
-			Objects.equals(collisionShapes, that.collisionShapes) &&
-			Objects.equals(actions, that.actions) &&
-			Objects.equals(fluids, that.fluids) &&
-			Objects.equals(blockVariants, that.blockVariants);
+		return Objects.equals(internalId, that.internalId) && clientProtocolVersion == that.clientProtocolVersion && Objects.equals(serverVersion, that.serverVersion) && Objects.equals(frames, that.frames) && frameAttributesEqual(frameAttributes, that.frameAttributes) && Objects.equals(collisionShapes, that.collisionShapes) && Objects.equals(actions, that.actions) && Objects.equals(fluids, that.fluids) && Objects.equals(blockVariants, that.blockVariants);
 	}
 
 	@Override
@@ -327,16 +317,11 @@ public final class MovementRecording {
 		return Objects.hash(internalId, clientProtocolVersion, serverVersion);
 	}
 
-	private static boolean frameAttributesEqual(
-		List<Map<String, Attribute>> first,
-		List<Map<String, Attribute>> second
-	) {
+	private static boolean frameAttributesEqual(List<Map<String, Attribute>> first, List<Map<String, Attribute>> second) {
 		int size = Math.max(first.size(), second.size());
 		for (int i = 0; i < size; i++) {
-			Map<String, Attribute> firstFrame =
-				i < first.size() ? first.get(i) : Collections.emptyMap();
-			Map<String, Attribute> secondFrame =
-				i < second.size() ? second.get(i) : Collections.emptyMap();
+			Map<String, Attribute> firstFrame = i < first.size() ? first.get(i) : Collections.emptyMap();
+			Map<String, Attribute> secondFrame = i < second.size() ? second.get(i) : Collections.emptyMap();
 			if (!firstFrame.equals(secondFrame)) {
 				return false;
 			}
@@ -352,32 +337,15 @@ public final class MovementRecording {
 		return create(47, MinecraftVersions.VER1_21_4);
 	}
 
-	public static MovementRecording createFor(
-		User user
-	) {
+	public static MovementRecording createFor(User user) {
 		return create(user.protocolVersion(), MinecraftVersion.current());
 	}
 
-	public static MovementRecording create(
-		int clientProtocolVersion,
-		MinecraftVersion serverVersion
-	) {
-		return new MovementRecording(
-			UUID.randomUUID(),
-			clientProtocolVersion,
-			serverVersion,
-			new LinkedList<>(),
-			new LinkedList<>(),
-			new ArrayList<>(),
-			new HashMap<>(),
-			new HashMap<>(),
-			new HashMap<>()
-		);
+	public static MovementRecording create(int clientProtocolVersion, MinecraftVersion serverVersion) {
+		return new MovementRecording(UUID.randomUUID(), clientProtocolVersion, serverVersion, new LinkedList<>(), new LinkedList<>(), new ArrayList<>(), new HashMap<>(), new HashMap<>(), new HashMap<>());
 	}
 
-	public static MovementRecording loadFrom(
-		Resource resource
-	) throws RuntimeException {
+	public static MovementRecording loadFrom(Resource resource) throws RuntimeException {
 		InputStream read = new InflaterInputStream(resource.read());
 		ByteArrayOutputStream baos = new ByteArrayOutputStream();
 		byte[] buffer = new byte[8192];
@@ -404,15 +372,29 @@ public final class MovementRecording {
 		MovementRecording movementRecording = MovementRecording.create();
 		MockFullBlockStaticPlane blockCache = new MockFullBlockStaticPlane();
 		for (int i = 0; i < 400; i++) {
-			movementRecording.insertFrame(
-				BoundingBox.empty(),
-				Input.random(),
-				ThreadLocalRandom.current().nextBoolean() ? Position.immutableRandom() : null,
-				ThreadLocalRandom.current().nextBoolean() ? Rotation.zero() : null,
-				blockCache,
-				ThreadLocalRandom.current().nextBoolean()
-			);
+			movementRecording.insertFrame(BoundingBox.empty(), Input.random(), ThreadLocalRandom.current().nextBoolean() ? Position.immutableRandom() : null, ThreadLocalRandom.current().nextBoolean() ? Rotation.zero() : null, blockCache, ThreadLocalRandom.current().nextBoolean());
 		}
 		return movementRecording;
+	}
+
+	public static final class VelocityToken {
+		private VelocityToken() {
+		}
+	}
+
+	private static final class VelocityInterval {
+		private final Motion motion;
+		private final long startInclusive;
+		private Long endExclusive;
+
+		private VelocityInterval(Motion motion, long startInclusive) {
+			this(motion, startInclusive, null);
+		}
+
+		private VelocityInterval(Motion motion, long startInclusive, Long endExclusive) {
+			this.motion = motion;
+			this.startInclusive = startInclusive;
+			this.endExclusive = endExclusive;
+		}
 	}
 }

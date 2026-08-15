@@ -11,18 +11,18 @@
 
 package de.jpx3.intave.cloud.protocol.pipeline;
 
+import ac.intave.cloud.protocol.Packet;
+import ac.intave.cloud.protocol.PacketRegistry;
+import ac.intave.cloud.protocol.ProtocolSpecification;
+import ac.intave.cloud.protocol.compression.CompressionAlgorithms;
+import ac.intave.cloud.protocol.listener.Clientbound;
+import ac.intave.cloud.protocol.packets.base.ClientboundDisconnect;
+import ac.intave.cloud.protocol.packets.base.ClientboundHello;
+import ac.intave.cloud.protocol.packets.base.ServerboundConfirmEncryption;
+import ac.intave.cloud.protocol.packets.base.ServerboundHello;
 import de.jpx3.intave.IntaveLogger;
 import de.jpx3.intave.cloud.Session;
 import de.jpx3.intave.cloud.protocol.CloudToken;
-import de.jpx3.intave.cloud.protocol.Packet;
-import de.jpx3.intave.cloud.protocol.PacketRegistry;
-import de.jpx3.intave.cloud.protocol.ProtocolSpecification;
-import de.jpx3.intave.cloud.protocol.compress.CompressionAlgorithms;
-import de.jpx3.intave.cloud.protocol.listener.Clientbound;
-import de.jpx3.intave.cloud.protocol.packets.base.ClientboundDisconnect;
-import de.jpx3.intave.cloud.protocol.packets.base.ClientboundHello;
-import de.jpx3.intave.cloud.protocol.packets.base.ServerboundConfirmEncryption;
-import de.jpx3.intave.cloud.protocol.packets.base.ServerboundHello;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 
@@ -38,8 +38,8 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.stream.Collectors;
 
-import static de.jpx3.intave.cloud.protocol.Direction.CLIENTBOUND;
-import static de.jpx3.intave.cloud.protocol.Direction.SERVERBOUND;
+import static ac.intave.cloud.protocol.Direction.CLIENTBOUND;
+import static ac.intave.cloud.protocol.Direction.SERVERBOUND;
 
 public final class HandshakeReceiver extends ChannelInboundHandlerAdapter implements Clientbound {
   private final Session session;

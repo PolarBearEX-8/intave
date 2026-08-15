@@ -63,6 +63,7 @@ public final class RedoSimulationSearch implements SimulationSearch {
 		);
 		if (horizontalVL > 0) {
 			Simulation simulation = delegate.greedyFullTickSearch(user, simulationEnvironment, simulator);
+			simulation.addSimulationCount(firstSimulation.simulationCount());
 			simulation.appendPurple("redo:H("+firstSimulation.blueDetails()+")");
 			return simulation;
 		}
@@ -71,6 +72,7 @@ public final class RedoSimulationSearch implements SimulationSearch {
 		);
 		if (verticalVL > 0) {
 			Simulation simulation = delegate.greedyFullTickSearch(user, simulationEnvironment, simulator);
+			simulation.addSimulationCount(firstSimulation.simulationCount());
 			simulation.appendPurple("redo:V("+firstSimulation.blueDetails()+")");
 			return simulation;
 		}

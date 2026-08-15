@@ -26,11 +26,12 @@ import static de.jpx3.intave.codec.ByteBufStreamCodecs.*;
 
 public final class MoveFrame {
 	private static final int VERSIONED_LIST_MARKER = Integer.MIN_VALUE;
-	private static final int CURRENT_FORMAT_VERSION = 2;
+	private static final int CURRENT_FORMAT_VERSION = 3;
 	private static final int MAX_FRAME_COUNT = 1_048_576;
 	private static final StreamCodec<ByteBuf, ByteBuf, Position> POSITION_CODEC = Position.STREAM_CODEC.nullable(BOOLEAN);
 	private static final StreamCodec<ByteBuf, ByteBuf, Rotation> ROTATION_CODEC = Rotation.STREAM_CODEC.nullable(BOOLEAN);
 	private static final StreamCodec<ByteBuf, ByteBuf, Pose> POSE_CODEC = STRING.beforeAndAfter(Pose::valueOf, Pose::name).nullable(BOOLEAN);
+	private static final StreamCodec<ByteBuf, ByteBuf, MovementFrameState> MOVEMENT_STATE_CODEC = MovementFrameState.STREAM_CODEC.nullable(BOOLEAN);
 	private static final StreamCodec<ByteBuf, ByteBuf, Map<BlockPosition, MaterialVariantStore>> BLOCKS_CODEC = StreamCodec.mapCodec(BlockPosition.STREAM_CODEC, MaterialVariantStore.STREAM_CODEC, INTEGER);
 
 	private final Map<BlockPosition, MaterialVariantStore> dirtyBlocks = new HashMap<>();
@@ -39,6 +40,7 @@ public final class MoveFrame {
 	private final Input input;
 	private final boolean gliding;
 	private final @Nullable Pose physicalPose;
+	private final @Nullable MovementFrameState movementState;
 
 	private static final StreamCodec<ByteBuf, ByteBuf, MoveFrame> BASE_STREAM_CODEC = StreamCodec.compound(
 		POSITION_CODEC, MoveFrame::moveTo,
@@ -50,7 +52,7 @@ public final class MoveFrame {
 		)
 	);
 
-	private static final StreamCodec<ByteBuf, ByteBuf, MoveFrame> CURRENT_STREAM_CODEC = StreamCodec.of((buffer, frame) -> {
+	private static final StreamCodec<ByteBuf, ByteBuf, MoveFrame> VERSION_2_STREAM_CODEC = StreamCodec.of((buffer, frame) -> {
 		BASE_STREAM_CODEC.encode(buffer, frame);
 		BOOLEAN.encode(buffer, frame.gliding());
 		POSE_CODEC.encode(buffer, frame.physicalPose());
@@ -59,6 +61,17 @@ public final class MoveFrame {
 		return new MoveFrame(
 			frame.moveTo, frame.rotateTo, frame.dirtyBlocks, frame.input,
 			BOOLEAN.decode(buffer), POSE_CODEC.decode(buffer)
+		);
+	});
+
+	private static final StreamCodec<ByteBuf, ByteBuf, MoveFrame> CURRENT_STREAM_CODEC = StreamCodec.of((buffer, frame) -> {
+		VERSION_2_STREAM_CODEC.encode(buffer, frame);
+		MOVEMENT_STATE_CODEC.encode(buffer, frame.movementState());
+	}, buffer -> {
+		MoveFrame frame = VERSION_2_STREAM_CODEC.decode(buffer);
+		return new MoveFrame(
+			frame.moveTo, frame.rotateTo, frame.dirtyBlocks, frame.input,
+			frame.gliding, frame.physicalPose, MOVEMENT_STATE_CODEC.decode(buffer)
 		);
 	});
 
@@ -78,20 +91,28 @@ public final class MoveFrame {
 			throw new IllegalStateException("Unknown movement frame list marker: " + markerOrLegacySize);
 		}
 		int version = INTEGER.decode(buffer);
-		if (version != CURRENT_FORMAT_VERSION) {
-			throw new IllegalStateException("Unsupported movement frame format version: " + version);
-		}
 		int size = INTEGER.decode(buffer);
-		return decodeFrames(buffer, size, CURRENT_STREAM_CODEC);
+		if (version == 2) {
+			return decodeFrames(buffer, size, VERSION_2_STREAM_CODEC);
+		}
+		if (version == CURRENT_FORMAT_VERSION) {
+			return decodeFrames(buffer, size, CURRENT_STREAM_CODEC);
+		}
+		throw new IllegalStateException("Unsupported movement frame format version: " + version);
 	});
 
 	public MoveFrame(@Nullable Position moveTo, @Nullable Rotation rotateTo, Map<BlockPosition, MaterialVariantStore> dirtyBlocks, Input input, boolean gliding, @Nullable Pose physicalPose) {
+		this(moveTo, rotateTo, dirtyBlocks, input, gliding, physicalPose, null);
+	}
+
+	public MoveFrame(@Nullable Position moveTo, @Nullable Rotation rotateTo, Map<BlockPosition, MaterialVariantStore> dirtyBlocks, Input input, boolean gliding, @Nullable Pose physicalPose, @Nullable MovementFrameState movementState) {
 		this.moveTo = moveTo;
 		this.rotateTo = rotateTo;
 		this.dirtyBlocks.putAll(dirtyBlocks);
 		this.input = input;
 		this.gliding = gliding;
 		this.physicalPose = physicalPose;
+		this.movementState = movementState;
 	}
 
 	public Map<BlockPosition, MaterialVariantStore> blocks() {
@@ -118,6 +139,10 @@ public final class MoveFrame {
 		return physicalPose;
 	}
 
+	public @Nullable MovementFrameState movementState() {
+		return movementState;
+	}
+
 	@Override
 	public String toString() {
 		return "MoveFrame{" + "moveTo=" + moveTo + ", rotateTo=" + rotateTo + ", dirtyBlocks=" + dirtyBlocks + ", input=" + input + ", gliding=" + gliding + ", physicalPose=" + physicalPose + '}';
@@ -133,7 +158,8 @@ public final class MoveFrame {
 		if (!Objects.equals(rotateTo, moveFrame.rotateTo)) return false;
 		if (!Objects.equals(input, moveFrame.input)) return false;
 		if (gliding != moveFrame.gliding) return false;
-		return Objects.equals(physicalPose, moveFrame.physicalPose);
+		if (!Objects.equals(physicalPose, moveFrame.physicalPose)) return false;
+		return Objects.equals(movementState, moveFrame.movementState);
 	}
 
 	@Override
@@ -144,6 +170,7 @@ public final class MoveFrame {
 		result = 31 * result + input.hashCode();
 		result = 31 * result + Boolean.hashCode(gliding);
 		result = 31 * result + (physicalPose != null ? physicalPose.hashCode() : 0);
+		result = 31 * result + (movementState != null ? movementState.hashCode() : 0);
 		return result;
 	}
 

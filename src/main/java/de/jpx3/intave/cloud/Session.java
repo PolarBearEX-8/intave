@@ -11,16 +11,22 @@
 
 package de.jpx3.intave.cloud;
 
+import ac.intave.cloud.protocol.*;
+import ac.intave.cloud.protocol.compression.CompressionAlgorithm;
+import ac.intave.cloud.protocol.compression.CompressionAlgorithms;
+import ac.intave.cloud.protocol.listener.Clientbound;
+import ac.intave.cloud.protocol.listener.Serverbound;
+import ac.intave.cloud.protocol.packets.base.ServerboundKeepAlive;
+import ac.intave.cloud.protocol.packets.player.ServerboundPlayerLogin;
+import ac.intave.cloud.protocol.packets.player.ServerboundPlayerLogout;
+import ac.intave.cloud.protocol.pipeline.*;
 import de.jpx3.intave.IntaveLogger;
-import de.jpx3.intave.cloud.protocol.*;
-import de.jpx3.intave.cloud.protocol.compress.CompressionAlgorithm;
-import de.jpx3.intave.cloud.protocol.compress.CompressionAlgorithms;
-import de.jpx3.intave.cloud.protocol.listener.Clientbound;
-import de.jpx3.intave.cloud.protocol.listener.Serverbound;
-import de.jpx3.intave.cloud.protocol.packets.base.ServerboundKeepAlive;
-import de.jpx3.intave.cloud.protocol.packets.player.ServerboundPlayerLogin;
-import de.jpx3.intave.cloud.protocol.packets.player.ServerboundPlayerLogout;
-import de.jpx3.intave.cloud.protocol.pipeline.*;
+import de.jpx3.intave.IntavePlugin;
+import de.jpx3.intave.cloud.protocol.Attestation;
+import de.jpx3.intave.cloud.protocol.Attestations;
+import de.jpx3.intave.cloud.protocol.CloudToken;
+import de.jpx3.intave.cloud.protocol.pipeline.Errors;
+import de.jpx3.intave.cloud.protocol.pipeline.HandshakeReceiver;
 import de.jpx3.intave.executor.BackgroundExecutors;
 import de.jpx3.intave.executor.IntaveThreadFactory;
 import de.jpx3.intave.user.User;
@@ -33,9 +39,11 @@ import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.timeout.ReadTimeoutHandler;
 import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
+import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
 
 import javax.crypto.Cipher;
+import java.net.InetAddress;
 import java.security.Key;
 import java.security.PublicKey;
 import java.util.*;
@@ -44,8 +52,8 @@ import java.util.concurrent.atomic.LongAdder;
 import java.util.function.Consumer;
 import java.util.function.LongFunction;
 
-import static de.jpx3.intave.cloud.protocol.Direction.CLIENTBOUND;
-import static de.jpx3.intave.cloud.protocol.Direction.SERVERBOUND;
+import static ac.intave.cloud.protocol.Direction.CLIENTBOUND;
+import static ac.intave.cloud.protocol.Direction.SERVERBOUND;
 import static io.netty.channel.ChannelOption.CONNECT_TIMEOUT_MILLIS;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.SECONDS;
@@ -470,7 +478,7 @@ public final class Session {
 
 	public void clarifyUnknownPlayerId(User user, long id) {
 		BackgroundExecutors.execute(() -> {
-			sendPacket(new ServerboundPlayerLogin(Identity.from(user), id));
+			sendPacket(new ServerboundPlayerLogin(identityOf(user), id));
 		});
 	}
 
@@ -484,7 +492,7 @@ public final class Session {
 	private void requestPlayerId(User user, UUID userId) {
 		if (requestedPlayerIds.add(userId)) {
 			try {
-				sendPacket(new ServerboundPlayerLogin(Identity.from(user)));
+				sendPacket(new ServerboundPlayerLogin(identityOf(user)));
 			} catch (RuntimeException exception) {
 				requestedPlayerIds.remove(userId);
 				throw exception;
@@ -503,6 +511,18 @@ public final class Session {
 				}
 			}
 		});
+	}
+
+	private static Identity identityOf(User user) {
+		if (!user.hasPlayer()) {
+			throw new IllegalArgumentException("User does not have a player");
+		}
+		Player player = user.player();
+		InetAddress address = null;
+		if (IntavePlugin.singletonInstance().cloud().config().privacy().annotateINetAdds()) {
+			address = player.getAddress().getAddress();
+		}
+		return new Identity(player.getUniqueId(), player.getName(), address);
 	}
 
 	private void notifyShutdownSubscribers() {

@@ -11,6 +11,9 @@
 
 package de.jpx3.intave.module.tracker.entity;
 
+import ac.intave.samples.event.EntityMoveEvent;
+import ac.intave.samples.event.EntityRemoveEvent;
+import ac.intave.samples.event.EntitySpawnEvent;
 import com.comphenix.protocol.PacketType;
 import com.comphenix.protocol.events.PacketContainer;
 import com.comphenix.protocol.events.PacketEvent;
@@ -33,10 +36,7 @@ import de.jpx3.intave.module.feedback.FeedbackObserver;
 import de.jpx3.intave.module.linker.packet.ListenerPriority;
 import de.jpx3.intave.module.linker.packet.PacketSubscription;
 import de.jpx3.intave.module.nayoro.Nayoro;
-import de.jpx3.intave.module.nayoro.event.EntityMoveEvent;
-import de.jpx3.intave.module.nayoro.event.EntityRemoveEvent;
-import de.jpx3.intave.module.nayoro.event.EntitySpawnEvent;
-import de.jpx3.intave.module.nayoro.event.sink.EventSink;
+import de.jpx3.intave.module.nayoro.SampleTypes;
 import de.jpx3.intave.packet.PacketSender;
 import de.jpx3.intave.packet.PacketTypes;
 import de.jpx3.intave.packet.reader.EntityIterable;
@@ -65,8 +65,6 @@ import org.bukkit.inventory.meta.ItemMeta;
 import javax.annotation.Nullable;
 import java.util.*;
 import java.util.concurrent.ThreadLocalRandom;
-import java.util.function.BiConsumer;
-import java.util.function.Consumer;
 
 import static de.jpx3.intave.check.movement.physics.environment.MoveMetric.TELEPORT;
 import static de.jpx3.intave.module.feedback.FeedbackOptions.*;
@@ -725,8 +723,6 @@ public final class EntityTracker extends Module {
     }
   }
 
-  private final BiConsumer<User, Consumer<EventSink>> sinkCallback = Modules.nayoro().sinkCallback();
-
   private void nayoroEntitySpawn(User user, Entity entity) {
     Nayoro nayoro = Modules.nayoro();
     if (!nayoro.recordingActiveFor(user)) {
@@ -735,10 +731,10 @@ public final class EntityTracker extends Module {
     EntitySpawnEvent event = new EntitySpawnEvent(
       entity.entityId(),
       entity.entityName(),
-      entity.typeData().size(),
-      entity.position.toPosition()
+      SampleTypes.hitboxSize(entity.typeData().size()),
+      SampleTypes.position(entity.position.toPosition())
     );
-    sinkCallback.accept(user, event::accept);
+    nayoro.emit(user, event);
   }
 
   private void nayoroEntityDespawn(User user, Entity entity) {
@@ -747,7 +743,7 @@ public final class EntityTracker extends Module {
       return;
     }
     EntityRemoveEvent event = new EntityRemoveEvent(entity.entityId());
-    sinkCallback.accept(user, event::accept);
+    nayoro.emit(user, event);
   }
 
   private void nayoroEntityPositionUpdate(Player player, Entity entity) {
@@ -759,11 +755,11 @@ public final class EntityTracker extends Module {
     Entity.EntityPositionContext lastPosition = entity.lastPosition;
     EntityMoveEvent event = new EntityMoveEvent(
       entity.entityId(),
-      position.posX, position.posY, position.posZ,
-      lastPosition.posX, lastPosition.posY, lastPosition.posZ,
-      0, 0, 0, 0
+      SampleTypes.position(position.toPosition()), SampleTypes.position(lastPosition.toPosition()),
+      new ac.intave.samples.share.Rotation(0, 0),
+      new ac.intave.samples.share.Rotation(0, 0)
     );
-    sinkCallback.accept(UserRepository.userOf(player), event::accept);
+    nayoro.emit(UserRepository.userOf(player), event);
   }
 
   private Entity spawnMobByBukkitEntity(User user, org.bukkit.entity.Entity bukkitEntity) {

@@ -67,7 +67,6 @@ public final class IntaveControl {
   public static final boolean DEBUG_VARIANT_COMPILATION = false;
   public static final boolean DEBUG_ENTITY_TRACKING = false;
   public static final boolean DEBUG_ATTACK_DAMAGE_MODIFIERS = false;
-  public static final boolean DEBUG_MOVEMENT_BLOCK_FALLEN_UPON = false; // spams on testing
   public static final boolean GIVE_RIPTIDE_V_TRIDENT_ON_JOIN = false;
   public static final boolean DEBUG_FEEDBACK_PACKETS = false;
   public static final boolean DEBUG_ITEM_USAGE = false;

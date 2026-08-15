@@ -47,6 +47,7 @@ import de.jpx3.intave.module.linker.packet.ListenerPriority;
 import de.jpx3.intave.module.linker.packet.PacketSubscription;
 import de.jpx3.intave.module.linker.packet.PrioritySlot;
 import de.jpx3.intave.module.mitigate.AttackNerfStrategy;
+import de.jpx3.intave.module.test.PhysicsTestRecorder;
 import de.jpx3.intave.module.tracker.entity.Entity;
 import de.jpx3.intave.module.tracker.player.PacketLogging;
 import de.jpx3.intave.module.violation.Violation;
@@ -914,15 +915,23 @@ public final class MovementDispatcher extends Module {
       Motion finalVelocity = motion.copy();
 
       AtomicReference<MotionSetUpdate> velocity = new AtomicReference<>(null);
+      PhysicsTestRecorder recorder = Modules.physicsTestRecorder();
+      AtomicReference<PhysicsTestRecorder.VelocityCapture> recordingVelocity = new AtomicReference<>(null);
       user.doubleTickFeedback(event,
         () -> {
-	        velocity.set(MotionSetUpdate.openEnded(
-		        finalVelocity,
-		        movementData
-	        ));
+          recordingVelocity.set(
+            recorder.beginVelocity(user, finalVelocity)
+          );
+          velocity.set(MotionSetUpdate.openEnded(
+            finalVelocity,
+            movementData
+          ));
           movementData.queueTickAmbiguousUpdate(velocity.get());
         },
         () -> {
+          recorder.completeVelocity(
+            user, recordingVelocity.get()
+          );
           MotionSetUpdate myMotionSetUpdate = velocity.get();
           if (myMotionSetUpdate != null) {
             myMotionSetUpdate.canNotRunAfterThisTick(movementData);

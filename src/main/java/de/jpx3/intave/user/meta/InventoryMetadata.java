@@ -252,6 +252,34 @@ public final class InventoryMetadata {
     this.handActive = handActive;
   }
 
+  public void restoreRecordedState(
+    int heldSlot,
+    boolean handActive,
+    int handActiveTicks,
+    int pastHandActiveTicks,
+    int pastItemUsageTransition,
+    boolean inventoryOpen,
+    Material activeItemType,
+    boolean foodItem,
+    boolean releaseItemNextTick,
+    Material releaseItemType,
+    boolean activatedItemThisTick,
+    boolean deactivatedItemThisTick
+  ) {
+    this.handSlot = heldSlot;
+    this.handActive = handActive;
+    this.handActiveTicks = handActiveTicks;
+    this.pastHandActiveTicks = pastHandActiveTicks;
+    this.pastItemUsageTransition = pastItemUsageTransition;
+    this.inventoryOpen = inventoryOpen;
+    this.activeItemType = activeItemType;
+    this.foodItem = foodItem;
+    this.releaseItemNextTick = releaseItemNextTick;
+    this.releaseItemType = releaseItemType;
+    this.activatedItemThisTick = activatedItemThisTick;
+    this.deactivatedItemThisTick = deactivatedItemThisTick;
+  }
+
   public void updateInventoryOpenState(boolean inventoryOpen) {
     User user = UserRepository.userOf(player);
     ProtocolMetadata clientData = user.meta().protocol();

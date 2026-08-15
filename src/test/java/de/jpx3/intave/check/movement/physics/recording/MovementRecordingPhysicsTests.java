@@ -31,6 +31,7 @@ import de.jpx3.intave.check.movement.physics.simulator.Simulator;
 import de.jpx3.intave.check.movement.physics.simulator.Simulators;
 import de.jpx3.intave.check.movement.physics.update.MotionSetUpdate;
 import de.jpx3.intave.module.test.record.MoveFrame;
+import de.jpx3.intave.module.test.record.MovementFrameState;
 import de.jpx3.intave.module.test.record.MovementRecording;
 import de.jpx3.intave.module.test.record.action.Action;
 import de.jpx3.intave.module.test.record.action.ReceiveVelocity;
@@ -40,6 +41,7 @@ import de.jpx3.intave.resource.Resources;
 import de.jpx3.intave.share.*;
 import de.jpx3.intave.test.FakePlayerFactory;
 import de.jpx3.intave.test.FakeWorldFactory;
+import de.jpx3.intave.test.MockEmptyInventory;
 import de.jpx3.intave.user.User;
 import de.jpx3.intave.user.UserFactory;
 import de.jpx3.intave.user.UserRepository;
@@ -148,6 +150,63 @@ final class MovementRecordingPhysicsTests {
 	}
 
 	@Test
+	void recordedFrameStateRestoresPreviouslyUnrepresentableSimulatorInputs() {
+		MovementRecording recording = MovementRecording.create(
+			VER_1_21_2,
+			MinecraftVersions.VER1_21_4
+		);
+		preparePhysicsTestRuntime(recording);
+
+		Position position = new Position(0, 64, 0);
+		Rotation rotation = Rotation.zero();
+		AtomicReference<Location> currentLocation = new AtomicReference<>();
+		World world = createReplayWorld();
+		currentLocation.set(locationOf(world, position, rotation));
+		PlaybackBlockCacheView blockCache = new PlaybackBlockCacheView(recording);
+
+		MovementFrameState.ItemState elytra = new MovementFrameState.ItemState(
+			org.bukkit.Material.ELYTRA, 1, 0, Map.of()
+		);
+		MovementFrameState state = new MovementFrameState(
+			new MovementFrameState.AbilityState(true, true, false, 0.08F, "CREATIVE"),
+			new MovementFrameState.EffectState(2, 40, 1, 20, 3, 10, Collections.emptyList()),
+			new MovementFrameState.InventoryState(
+				List.of(new MovementFrameState.ItemState(org.bukkit.Material.BOW, 1, 0, Map.of())),
+				Arrays.asList(null, null, elytra, null),
+				null, 0, true, 5, 0, 2, false, org.bukkit.Material.BOW,
+				false, false, org.bukkit.Material.AIR, true, false
+			),
+			3, 2,
+			new MovementFrameState.EntityState(
+				42, true, "Boat", 1, false, 10,
+				1.375F, 0.5625F, false, true, 0.0, 64.0, 0.0
+			),
+			List.of(new MovementFrameState.EntityState(
+				43, true, "Zombie", 54, true, 9,
+				0.6F, 1.95F, false, true, 0.1, 64.0, 0.1
+			)),
+			"IN_WATER", "IN_AIR", 0.8F, 64.7D,
+			2, 0, 4
+		);
+		ReplayPlayerState replayState = new ReplayPlayerState(state);
+		User user = createReplayUser(recording, blockCache, world, currentLocation, replayState);
+
+		replayState.apply(user, state);
+
+		assertSame(Simulators.BOAT, Simulators.selectFor(user.meta().movement()));
+		assertTrue(user.meta().abilities().flying());
+		assertTrue(user.meta().movement().hasElytraEquipped());
+		assertEquals(2, user.meta().movement().activeFireworkRockets());
+		assertEquals(1, user.meta().connection().tracedEntities().size());
+		assertEquals(2, user.meta().potions().potionEffectSpeedAmplifier());
+		assertTrue(user.meta().inventory().handActive());
+		assertEquals(org.bukkit.Material.BOW, user.meta().inventory().heldItemType());
+		assertEquals(2, user.meta().movement().reduceTicks());
+		assertEquals(0, user.meta().movement().ticksPast(ATTACK_REDUCE));
+		assertEquals(4, user.meta().movement().ticksPast(ENTITY_USE));
+	}
+
+	@Test
 	void recordedPoseDistinguishesNormalAndRejectedElytraStops() {
 		MovementRecording recording = MovementRecording.loadFrom(
 			Resources.resourceFromJarOrTestBuild(
@@ -210,8 +269,15 @@ final class MovementRecordingPhysicsTests {
 		World world = createReplayWorld();
 		currentLocation.set(locationOf(world, initialPosition, initialRotation));
 
-		User user = createReplayUser(recording, blockCache, world, currentLocation);
+		MovementFrameState initialFrameState = firstFrame.movementState();
+		ReplayPlayerState replayPlayerState = new ReplayPlayerState(
+			initialFrameState == null ? MovementFrameState.empty() : initialFrameState
+		);
+		User user = createReplayUser(recording, blockCache, world, currentLocation, replayPlayerState);
 		MovementMetadata metadata = user.meta().movement();
+		if (initialFrameState != null) {
+			replayPlayerState.apply(user, initialFrameState);
+		}
 		applyAttributesForTick(recording, user, firstPositionFrame);
 		metadata.gliding = firstFrame.gliding();
 		seedInitialMovementState(user, metadata, initialPosition, initialRotation);
@@ -226,6 +292,10 @@ final class MovementRecordingPhysicsTests {
 			MoveFrame frame = frames.get(tick);
 			Input input = frame.input();
 
+			MovementFrameState frameState = frame.movementState();
+			if (frameState != null) {
+				replayPlayerState.apply(user, frameState);
+			}
 			applyAttributesForTick(recording, user, tick);
 			applyInputsForTick(user, input);
 			applyActionsForTick(recording.actions(), metadata, tick);
@@ -320,13 +390,30 @@ final class MovementRecordingPhysicsTests {
 
 			if (loss > allowedLoss && tick > 16) {
 				System.out.println("\r" + "[FAILED] " + resourcePath + " (tick " + tick + ")");
+				String failureReportLink = null;
+				try {
+					Path report = PtrBranchingVisualizationTest.writeFailureReport(
+						resourcePath,
+						recording,
+						tick,
+						simulation,
+						metadata.sentOffsetMotion()
+					);
+					failureReportLink = PtrBranchingVisualizationTest.printReportLink(report, tick);
+				} catch (Exception | AssertionError reportFailure) {
+					System.out.println(
+						"[REPORT] Unable to write tick " + tick + " report: "
+							+ reportFailure.getMessage()
+					);
+				}
 				printFailureReport(
 					resourcePath, recording, frames, tick, loss, allowedLoss,
 					lastMessages, blockCache, user, metadata, simulation, processor, simulator
 				);
 				fail("Movement diverged at tick " + tick + ": loss "
 					+ formatDiagnosticDouble(loss) + " exceeds "
-					+ formatDiagnosticDouble(allowedLoss));
+					+ formatDiagnosticDouble(allowedLoss)
+					+ (failureReportLink == null ? "" : "\nPTR report: " + failureReportLink));
 			}
 
 			System.out.print("\r" + output);
@@ -650,12 +737,30 @@ final class MovementRecordingPhysicsTests {
 		PlaybackBlockCacheView blockCache, World world,
 		AtomicReference<Location> currentLocation
 	) {
+		return createReplayUser(
+			recording, blockCache, world, currentLocation,
+			new ReplayPlayerState(MovementFrameState.empty())
+		);
+	}
+
+	private static User createReplayUser(
+		MovementRecording recording,
+		PlaybackBlockCacheView blockCache, World world,
+		AtomicReference<Location> currentLocation,
+		ReplayPlayerState replayPlayerState
+	) {
 		UUID replayUserId = UUID.randomUUID();
 		Player player = FakePlayerFactory.createPlayer(
 			(methodName, _) -> switch (methodName) {
 				case "getWorld" -> world;
 				case "getLocation" -> currentLocation.get().clone();
 				case "getUniqueId" -> replayUserId;
+				case "getInventory" -> replayPlayerState.inventory();
+				case "getActivePotionEffects" -> replayPlayerState.state().effects().activePotionEffects();
+				case "isFlying" -> replayPlayerState.state().abilities().flying();
+				case "getAllowFlight" -> replayPlayerState.state().abilities().allowFlying();
+				case "getFlySpeed" -> replayPlayerState.state().abilities().flySpeed() * 2.0F;
+				case "getGameMode" -> replayPlayerState.state().abilities().gameMode();
 				case "isOnGround" -> false;
 				default -> null;
 			}
@@ -674,6 +779,28 @@ final class MovementRecordingPhysicsTests {
 		});
 		UserRepository.manuallyRegisterUser(player, user);
 		return user;
+	}
+
+	private static final class ReplayPlayerState {
+		private final AtomicReference<MovementFrameState> state;
+		private final MockEmptyInventory inventory = new MockEmptyInventory();
+
+		private ReplayPlayerState(MovementFrameState initialState) {
+			this.state = new AtomicReference<>(initialState);
+		}
+
+		private MovementFrameState state() {
+			return state.get();
+		}
+
+		private MockEmptyInventory inventory() {
+			return inventory;
+		}
+
+		private void apply(User user, MovementFrameState nextState) {
+			state.set(nextState);
+			nextState.applyTo(user, inventory);
+		}
 	}
 
 	private static World createReplayWorld() {

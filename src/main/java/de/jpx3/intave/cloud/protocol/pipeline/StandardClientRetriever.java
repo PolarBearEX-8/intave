@@ -11,29 +11,30 @@
 
 package de.jpx3.intave.cloud.protocol.pipeline;
 
+import ac.intave.cloud.protocol.Identity;
+import ac.intave.cloud.protocol.Packet;
+import ac.intave.cloud.protocol.listener.Clientbound;
+import ac.intave.cloud.protocol.packets.ClientboundCombatModifier;
+import ac.intave.cloud.protocol.packets.ClientboundSetTrustfactor;
+import ac.intave.cloud.protocol.packets.ClientboundViolation;
+import ac.intave.cloud.protocol.packets.base.ClientboundConfirmAttestations;
+import ac.intave.cloud.protocol.packets.base.ClientboundDisconnect;
+import ac.intave.cloud.protocol.packets.base.ClientboundHello;
+import ac.intave.cloud.protocol.packets.base.ClientboundKeepAlive;
+import ac.intave.cloud.protocol.packets.player.ClientboundClarifyUnknownPlayerId;
+import ac.intave.cloud.protocol.packets.player.ClientboundSendMessage;
+import ac.intave.cloud.protocol.packets.player.ClientboundSetPlayerId;
+import ac.intave.cloud.protocol.packets.sampling.ClientboundSetSamplingState;
+import ac.intave.samples.share.Classifier;
 import de.jpx3.intave.IntaveAccessor;
 import de.jpx3.intave.IntaveLogger;
 import de.jpx3.intave.IntavePlugin;
 import de.jpx3.intave.check.Check;
 import de.jpx3.intave.check.CheckService;
 import de.jpx3.intave.cloud.Session;
-import de.jpx3.intave.cloud.protocol.Packet;
-import de.jpx3.intave.cloud.protocol.listener.Clientbound;
-import de.jpx3.intave.cloud.protocol.packets.ClientboundCombatModifier;
-import de.jpx3.intave.cloud.protocol.packets.ClientboundSetTrustfactor;
-import de.jpx3.intave.cloud.protocol.packets.ClientboundViolation;
-import de.jpx3.intave.cloud.protocol.packets.base.ClientboundConfirmAttestations;
-import de.jpx3.intave.cloud.protocol.packets.base.ClientboundDisconnect;
-import de.jpx3.intave.cloud.protocol.packets.base.ClientboundHello;
-import de.jpx3.intave.cloud.protocol.packets.base.ClientboundKeepAlive;
-import de.jpx3.intave.cloud.protocol.packets.player.ClientboundClarifyUnknownPlayerId;
-import de.jpx3.intave.cloud.protocol.packets.player.ClientboundSendMessage;
-import de.jpx3.intave.cloud.protocol.packets.player.ClientboundSetPlayerId;
-import de.jpx3.intave.cloud.protocol.packets.sampling.ClientboundSetSamplingState;
 import de.jpx3.intave.executor.Synchronizer;
 import de.jpx3.intave.module.Modules;
 import de.jpx3.intave.module.mitigate.AttackNerfStrategy;
-import de.jpx3.intave.module.nayoro.Classifier;
 import de.jpx3.intave.module.nayoro.Nayoro;
 import de.jpx3.intave.module.violation.Violation;
 import de.jpx3.intave.module.violation.ViolationProcessor;
@@ -49,7 +50,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
-import static de.jpx3.intave.cloud.protocol.Direction.CLIENTBOUND;
+import static ac.intave.cloud.protocol.Direction.CLIENTBOUND;
 import static de.jpx3.intave.module.nayoro.OperationalMode.CLOUD_TRANSMISSION;
 
 public final class StandardClientRetriever extends ChannelInboundHandlerAdapter implements Clientbound {
@@ -92,7 +93,7 @@ public final class StandardClientRetriever extends ChannelInboundHandlerAdapter 
   public void onSetPlayerId(ClientboundSetPlayerId packet) {
     UUID userId = packet.identity().id();
     if (!session.awaitingPlayerId(packet.identity())) {
-      Player player = packet.identity().find();
+      Player player = findPlayer(packet.identity());
       if (player == null) {
         IntaveLogger.logger().error(
           "[Cloud] Received player ID for unknown player: " + packet.identity()
@@ -159,7 +160,11 @@ public final class StandardClientRetriever extends ChannelInboundHandlerAdapter 
       }
       IntaveAccessor.unsafeAccess()
         .player(player)
-        .setTrustFactor(packet.trustFactor());
+        .setTrustFactor(
+          de.jpx3.intave.access.player.trust.TrustFactor.valueOf(
+            packet.trustFactor()
+          )
+        );
     });
   }
 
@@ -251,6 +256,16 @@ public final class StandardClientRetriever extends ChannelInboundHandlerAdapter 
         + "' (version " + packet.version()
         + "): no application handler is registered"
     );
+  }
+
+  private static Player findPlayer(Identity identity) {
+    if (identity.id() != null) {
+      Player player = Bukkit.getPlayer(identity.id());
+      if (player != null) {
+        return player;
+      }
+    }
+    return identity.name() == null ? null : Bukkit.getPlayerExact(identity.name());
   }
 
   @Override

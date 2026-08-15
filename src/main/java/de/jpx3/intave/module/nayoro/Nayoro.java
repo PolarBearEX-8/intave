@@ -11,6 +11,9 @@
 
 package de.jpx3.intave.module.nayoro;
 
+import ac.intave.samples.event.Event;
+import ac.intave.samples.event.EventSink;
+import ac.intave.samples.share.Classifier;
 import com.google.common.collect.Sets;
 import de.jpx3.intave.IntaveControl;
 import de.jpx3.intave.IntavePlugin;
@@ -20,8 +23,8 @@ import de.jpx3.intave.executor.Synchronizer;
 import de.jpx3.intave.module.Module;
 import de.jpx3.intave.module.Modules;
 import de.jpx3.intave.module.linker.bukkit.BukkitEventSubscription;
-import de.jpx3.intave.module.nayoro.event.sink.EventSink;
-import de.jpx3.intave.module.nayoro.event.sink.ForwardEventSink;
+import de.jpx3.intave.module.nayoro.sink.ForwardEventSink;
+import de.jpx3.intave.module.nayoro.stream.ManualBufferedOutputStream;
 import de.jpx3.intave.user.User;
 import de.jpx3.intave.user.UserLocal;
 import de.jpx3.intave.user.UserRepository;
@@ -37,10 +40,7 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.ReentrantLock;
-import java.util.function.BiConsumer;
-import java.util.function.Consumer;
 import java.util.stream.Collectors;
-import java.util.zip.InflaterInputStream;
 
 public final class Nayoro extends Module {
   private static final OperationalMode MODE = IntaveControl.SAMPLE_OPERATIONAL_MODE;
@@ -48,7 +48,7 @@ public final class Nayoro extends Module {
   private final UserLocal<Set<EventSink>> eventSinks = UserLocal.withInitial(this::defaultSinksFor, this::disableRecordingFor);
   private final Map<UUID, Boolean> recording = GarbageCollector.watch(new ConcurrentHashMap<>());
   private final Map<UUID, OperationalMode> recordingMode = GarbageCollector.watch(new ConcurrentHashMap<>());
-  private final PacketEventDispatch packetEventDispatch = new PacketEventDispatch(sinkCallback());
+  private final PacketEventDispatch packetEventDispatch = new PacketEventDispatch(this::emit);
   private final List<Playback> playbacks = new ArrayList<>();
 
   private final ReentrantLock localRecordingLock = new ReentrantLock();
@@ -99,7 +99,7 @@ public final class Nayoro extends Module {
       Sample sample = new Sample();
       samples.put(user.id(), sample);
       OutputStream output = writeStreamFor(user.player(), sample, mode, transmissionId);
-      RecordEventSink recordEventSink = new RecordEventSink(new LiveEnvironment(user), new DataOutputStream(output), classifier);
+      RecordEventSink recordEventSink = new RecordEventSink(new LiveEnvironment(user), output, classifier);
       eventSinks.get(user).add(recordEventSink);
     } finally {
       localRecordingLock.unlock();
@@ -180,6 +180,9 @@ public final class Nayoro extends Module {
 
           @Override
           public void write(byte @NotNull [] b, int off, int len) {
+            if (len == 0) {
+              return;
+            }
             ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
             outputStream.write(b, off, len);
             byte[] writeStream = outputStream.toByteArray();
@@ -191,6 +194,12 @@ public final class Nayoro extends Module {
           @Override
           public void flush() {
             // no-op
+          }
+
+          @Override
+          public void close() {
+            IntavePlugin plugin = IntavePlugin.singletonInstance();
+            plugin.cloud().completeSampleTransmission(player, transmissionId, sampleSubIndex.get());
           }
         }, CLOUD_TRANSMISSION_BUFFER_SIZE);
       case LOCAL_STORAGE:
@@ -219,10 +228,8 @@ public final class Nayoro extends Module {
       }
       int available = sampleFile.length() > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) sampleFile.length();
       InputStream inputStream = Files.newInputStream(sampleFile.toPath());
-      inputStream = new InflaterInputStream(inputStream);
       inputStream = new BufferedInputStream(inputStream, 1024 * 1024);
-      DataInputStream dataInput = new DataInputStream(inputStream);
-      Playback playback = new InstantPlayback(dataInput, Runnable::run, playbacks::remove);
+      Playback playback = new InstantPlayback(inputStream, Runnable::run, playbacks::remove);
       playbacks.add(playback);
       playback.start();
       user.player().sendMessage(String.format("§aPlayback of length %d started.", available));
@@ -231,8 +238,8 @@ public final class Nayoro extends Module {
     }
   }
 
-  public BiConsumer<User, Consumer<EventSink>> sinkCallback() {
-    return (user, applyEventSink) -> eventSinks.get(user).forEach(applyEventSink);
+  public void emit(User user, Event event) {
+    eventSinks.get(user).forEach(event::accept);
   }
 
   public Set<EventSink> defaultSinksFor(User user) {

@@ -1,3 +1,14 @@
+/*
+ * Copyright 2026 Intave
+ *
+ * This software is licensed under the PolyForm Perimeter License 1.0.0.
+ * You may use this software for any purpose, except for providing to
+ * others any product that competes with the software.
+ *
+ * A copy of the license is available at:
+ *   https://polyformproject.org/licenses/perimeter/1.0.0/
+ */
+
 package de.jpx3.intave.user.meta;
 
 import org.bukkit.entity.Player;
@@ -82,5 +93,18 @@ public final class EffectMetadata {
 
   public void potionEffectJumpAmplifier(int potionEffectJumpAmplifier) {
     this.potionEffectJumpAmplifier = potionEffectJumpAmplifier;
+  }
+
+  public void restoreRecordedState(
+    int speedAmplifier, int speedDuration,
+    int slownessAmplifier, int slownessDuration,
+    int jumpAmplifier, int jumpDuration
+  ) {
+    this.potionEffectSpeedAmplifier = speedAmplifier;
+    this.potionEffectSpeedDuration = speedDuration;
+    this.potionEffectSlownessAmplifier = slownessAmplifier;
+    this.potionEffectSlownessDuration = slownessDuration;
+    this.potionEffectJumpAmplifier = jumpAmplifier;
+    this.potionEffectJumpDuration = jumpDuration;
   }
 }

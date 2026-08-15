@@ -11,12 +11,12 @@
 
 package de.jpx3.intave.benchmark;
 
+import ac.intave.cloud.protocol.compression.CompressionAlgorithm;
+import ac.intave.cloud.protocol.compression.CompressionAlgorithm.Decoder;
+import ac.intave.cloud.protocol.compression.CompressionAlgorithm.Encoder;
+import ac.intave.cloud.protocol.compression.ZlibCompressionAlgorithm;
+import ac.intave.cloud.protocol.compression.ZstdCompressionAlgorithm;
 import com.github.luben.zstd.Zstd;
-import de.jpx3.intave.cloud.protocol.compress.CompressionAlgorithm;
-import de.jpx3.intave.cloud.protocol.compress.CompressionAlgorithm.Decoder;
-import de.jpx3.intave.cloud.protocol.compress.CompressionAlgorithm.Encoder;
-import de.jpx3.intave.cloud.protocol.compress.ZlibCompressionAlgorithm;
-import de.jpx3.intave.cloud.protocol.compress.ZstdCompressionAlgorithm;
 
 import java.io.ByteArrayOutputStream;
 import java.nio.ByteBuffer;
