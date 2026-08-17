@@ -234,6 +234,7 @@ public final class Session {
 	}
 
 	public void sendPacket(Packet<Serverbound> packet) {
+		System.out.println("[Cloud] Sending serverbound packet '" + packet.name() + "' to " + endpoint());
 		if (packet instanceof AttestedPacket) {
 			AttestedPacket<?> attestedPacket = (AttestedPacket<?>) packet;
 			if (attestedPacket.hasIdempotencyToken()) {

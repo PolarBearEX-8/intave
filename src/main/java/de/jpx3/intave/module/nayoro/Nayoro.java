@@ -18,7 +18,6 @@ import com.google.common.collect.Sets;
 import de.jpx3.intave.IntaveControl;
 import de.jpx3.intave.IntavePlugin;
 import de.jpx3.intave.cleanup.GarbageCollector;
-import de.jpx3.intave.cloud.Cloud;
 import de.jpx3.intave.executor.Synchronizer;
 import de.jpx3.intave.module.Module;
 import de.jpx3.intave.module.Modules;
@@ -140,8 +139,6 @@ public final class Nayoro extends Module {
       if (sample != null && !mode.keepCopyOfSamples()) {
         sample.delete();
       }
-      Cloud cloud = IntavePlugin.singletonInstance().cloud();
-//      cloud.noteEndOfSampleTransmission(user.player());
     } finally {
       localRecordingLock.unlock();
     }

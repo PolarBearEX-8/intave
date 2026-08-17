@@ -54,7 +54,7 @@ final class PtrBranchingVisualizationTest {
 	private static final Path OUTPUT_ROOT = Path.of("build", "reports", "ptr-branching");
 	private static final int SAMPLE_CONFIGURATIONS = 4;
 	private static final int BLOCK_RADIUS = 4;
-	private static final int MAX_MULTI_TICK_CANDIDATES = 36;
+	private static final int THREE_TICK_SEARCH_LAST_DEPTH = 2;
 	private static final double EXACT_BRANCH_LOSS = 0.0001;
 	private static final double ACCEPTED_BRANCH_LOSS = 0.01;
 
@@ -205,7 +205,7 @@ final class PtrBranchingVisualizationTest {
 			current = next;
 		}
 
-		boolean winnerIsInFirstLayer = current.stream()
+		boolean winnerIsInFirstLayer = selectedSearchDepth == 0 && current.stream()
 			.anyMatch(branch -> branch.frequencyKey() == selectedFrequencyKey);
 		if (winnerIsInFirstLayer) {
 			long winnerAtStage = selectedFrequencyKey;
@@ -310,14 +310,21 @@ final class PtrBranchingVisualizationTest {
 		double flyingLimit = user.meta().protocol().flyingPacketUncertaintyRadius();
 		List<MultiTickLayerTrace> layers = new ArrayList<>();
 		List<MultiTickStepTrace> selectedPath = List.of();
+		List<CandidatePath> allCandidates = new ArrayList<>();
+		Set<Integer> uniqueEligibleIds = new HashSet<>();
+		Set<Integer> retainedIds = new HashSet<>();
+		Set<Integer> expandedIds = new HashSet<>();
+		int[] nextCandidateId = {0};
+		int selectedCandidateId = -1;
 		List<SearchParent> parents = List.of(new SearchParent(
 			rootEnvironment,
 			rootSimulator,
 			List.of(),
-			firstTickBranches
+			firstTickBranches,
+			-1
 		));
 
-		for (int depth = 0; depth <= selectedDepth; depth++) {
+		for (int depth = 0; depth <= THREE_TICK_SEARCH_LAST_DEPTH && !parents.isEmpty(); depth++) {
 			MutableMultiTickLayer layer = new MutableMultiTickLayer(depth);
 			List<SearchParent> nextParents = new ArrayList<>();
 			for (SearchParent parent : parents) {
@@ -332,8 +339,11 @@ final class PtrBranchingVisualizationTest {
 					startPosition,
 					targetPosition,
 					lastReportedPosition,
-					flyingLimit
+					flyingLimit,
+					parent.candidateId(),
+					nextCandidateId
 				);
+				allCandidates.addAll(candidates);
 				layer.capture(candidates, selectedDepth == depth ? selected : null);
 				if (depth == selectedDepth) {
 					CandidatePath winner = candidates.stream()
@@ -342,13 +352,19 @@ final class PtrBranchingVisualizationTest {
 						.orElse(null);
 					if (winner != null) {
 						selectedPath = winner.steps();
+						selectedCandidateId = winner.id();
 					}
+				}
+				if (depth == THREE_TICK_SEARCH_LAST_DEPTH) {
 					continue;
 				}
 
 				Retention retention = retainFlyingCandidates(candidates);
 				layer.captureRetention(retention);
+				uniqueEligibleIds.addAll(retention.uniqueCandidateIds());
 				for (CandidatePath candidate : retention.retained()) {
+					retainedIds.add(candidate.id());
+					expandedIds.add(candidate.id());
 					SimulationEnvironment nextEnvironment = candidate.simulation()
 						.environment().mutableView();
 					Simulator nextSimulator = parent.simulator().simulateAround(
@@ -362,7 +378,8 @@ final class PtrBranchingVisualizationTest {
 						nextEnvironment,
 						nextSimulator,
 						candidate.steps(),
-						null
+						null,
+						candidate.id()
 					));
 				}
 			}
@@ -374,6 +391,26 @@ final class PtrBranchingVisualizationTest {
 				"Unable to reconstruct selected multi-tick path at depth " + selectedDepth
 			);
 		}
+		Set<Integer> productionPathIds = new HashSet<>();
+		Map<Integer, CandidatePath> candidatesById = new HashMap<>();
+		for (CandidatePath candidate : allCandidates) {
+			candidatesById.put(candidate.id(), candidate);
+		}
+		for (int candidateId = selectedCandidateId; candidateId >= 0; ) {
+			productionPathIds.add(candidateId);
+			CandidatePath candidate = candidatesById.get(candidateId);
+			candidateId = candidate == null ? -1 : candidate.parentId();
+		}
+		int selectedNodeId = selectedCandidateId;
+		List<MultiTickCandidateTrace> candidateTree = allCandidates.stream()
+			.map(candidate -> candidate.freeze(
+				uniqueEligibleIds.contains(candidate.id()),
+				retainedIds.contains(candidate.id()),
+				expandedIds.contains(candidate.id()),
+				productionPathIds.contains(candidate.id()),
+				candidate.id() == selectedNodeId
+			))
+			.toList();
 
 		return new MultiTickTrace(
 			selectedDepth,
@@ -381,7 +418,8 @@ final class PtrBranchingVisualizationTest {
 			flyingLimit,
 			!selectedPath.isEmpty(),
 			layers,
-			selectedPath
+			selectedPath,
+			candidateTree
 		);
 	}
 
@@ -419,7 +457,9 @@ final class PtrBranchingVisualizationTest {
 		Position startPosition,
 		Position targetPosition,
 		Position lastReportedPosition,
-		double flyingLimit
+		double flyingLimit,
+		int parentId,
+		int[] nextCandidateId
 	) {
 		List<MovementSearchBranch> sortedBranches = branches.stream()
 			.sorted(Comparator.comparingLong(MovementSearchBranch::frequencyKey))
@@ -459,6 +499,8 @@ final class PtrBranchingVisualizationTest {
 				branch.canFinishExplicitTick()
 			));
 			candidates.add(new CandidatePath(
+				nextCandidateId[0]++,
+				parentId,
 				copy,
 				List.copyOf(steps),
 				implicitEligible,
@@ -481,9 +523,11 @@ final class PtrBranchingVisualizationTest {
 				.comparingDouble(CandidatePath::flyingDistance)
 				.thenComparing(candidate -> candidate.simulation().configuration().toString())
 				.thenComparing(candidate -> candidate.steps().getLast().key()))
-			.limit(MAX_MULTI_TICK_CANDIDATES)
 			.toList();
-		return new Retention(unique.size(), retained);
+		Set<Integer> uniqueCandidateIds = unique.values().stream()
+			.map(CandidatePath::id)
+			.collect(java.util.stream.Collectors.toSet());
+		return new Retention(unique.size(), uniqueCandidateIds, retained);
 	}
 
 	private static boolean sameSimulation(Simulation left, Simulation right) {
@@ -775,6 +819,31 @@ final class PtrBranchingVisualizationTest {
 			field(json, "finishable", step.finishable());
 			json.append('}');
 		}
+		json.append("],\"candidates\":[");
+		for (int index = 0; index < multiTick.candidates().size(); index++) {
+			if (index > 0) {
+				json.append(',');
+			}
+			MultiTickCandidateTrace candidate = multiTick.candidates().get(index);
+			json.append('{');
+			field(json, "id", candidate.id()).append(',');
+			field(json, "parent", candidate.parentId()).append(',');
+			field(json, "depth", candidate.depth()).append(',');
+			field(json, "key", candidate.key()).append(',');
+			field(json, "config", candidate.configuration()).append(',');
+			field(json, "motion", candidate.motion()).append(',');
+			field(json, "x", candidate.positionX()).append(',');
+			field(json, "y", candidate.positionY()).append(',');
+			field(json, "z", candidate.positionZ()).append(',');
+			field(json, "loss", candidate.remainingLoss()).append(',');
+			field(json, "omissionDistance", candidate.omissionDistance()).append(',');
+			field(json, "implicitEligible", candidate.implicitEligible()).append(',');
+			field(json, "finishable", candidate.finishable()).append(',');
+			field(json, "retention", candidate.retention()).append(',');
+			field(json, "production", candidate.production()).append(',');
+			field(json, "selected", candidate.selected());
+			json.append('}');
+		}
 		json.append("]}");
 	}
 
@@ -956,7 +1025,8 @@ final class PtrBranchingVisualizationTest {
 		double omissionLimit,
 		boolean selectedPathFound,
 		List<MultiTickLayerTrace> layers,
-		List<MultiTickStepTrace> path
+		List<MultiTickStepTrace> path,
+		List<MultiTickCandidateTrace> candidates
 	) {
 	}
 
@@ -996,24 +1066,84 @@ final class PtrBranchingVisualizationTest {
 	) {
 	}
 
+	private record MultiTickCandidateTrace(
+		int id,
+		int parentId,
+		int depth,
+		String key,
+		String configuration,
+		String motion,
+		double positionX,
+		double positionY,
+		double positionZ,
+		double remainingLoss,
+		double omissionDistance,
+		boolean implicitEligible,
+		boolean finishable,
+		String retention,
+		boolean production,
+		boolean selected
+	) {
+	}
+
 	private record SearchParent(
 		SimulationEnvironment environment,
 		Simulator simulator,
 		List<MultiTickStepTrace> steps,
-		Set<MovementSearchBranch> branches
+		Set<MovementSearchBranch> branches,
+		int candidateId
 	) {
 	}
 
 	private record CandidatePath(
+		int id,
+		int parentId,
 		Simulation simulation,
 		List<MultiTickStepTrace> steps,
 		boolean implicitEligible,
 		double flyingDistance
 	) {
+		private MultiTickCandidateTrace freeze(
+			boolean uniqueEligible,
+			boolean retained,
+			boolean expanded,
+			boolean production,
+			boolean selected
+		) {
+			MultiTickStepTrace step = steps.getLast();
+			String retention = !implicitEligible
+				? "explicit-only"
+				: expanded
+					? "expanded"
+					: retained
+						? "retained"
+						: step.depth() >= THREE_TICK_SEARCH_LAST_DEPTH
+							? "depth-limit"
+							: uniqueEligible ? "retained" : "merged";
+			return new MultiTickCandidateTrace(
+				id,
+				parentId,
+				step.depth(),
+				step.key(),
+				step.configuration(),
+				step.motion(),
+				step.positionX(),
+				step.positionY(),
+				step.positionZ(),
+				step.remainingLoss(),
+				step.omissionDistance(),
+				step.implicitEligible(),
+				step.finishable(),
+				retention,
+				production,
+				selected
+			);
+		}
 	}
 
 	private record Retention(
 		int uniqueEligible,
+		Set<Integer> uniqueCandidateIds,
 		List<CandidatePath> retained
 	) {
 	}
@@ -1222,7 +1352,7 @@ final class PtrBranchingVisualizationTest {
 		<head>
 		<meta charset="utf-8">
 		<meta name="viewport" content="width=device-width, initial-scale=1">
-		<title>PTR physics branching · __RECORDING_NAME__</title>
+		<title>Physics Branch Visualization · __RECORDING_NAME__</title>
 		<style>
 		:root {
 			color-scheme: light dark;
@@ -1244,7 +1374,7 @@ final class PtrBranchingVisualizationTest {
 		}
 		* { box-sizing: border-box; }
 		body { margin: 0; background: var(--bg); color: var(--text); }
-		main { width: min(1180px, 100%); margin: 0 auto; padding: 32px 22px 48px; }
+		main { width: min(1320px, 100%); margin: 0 auto; padding: 32px 22px 48px; }
 		h1 { margin: 0; font-size: clamp(1.55rem, 3vw, 2.25rem); font-weight: 650; letter-spacing: -0.025em; }
 		.subtitle { margin: 8px 0 20px; color: var(--muted); }
 		.subtitle code { overflow-wrap: anywhere; white-space: normal; }
@@ -1258,12 +1388,37 @@ final class PtrBranchingVisualizationTest {
 		input[type="range"] { width: 100%; accent-color: var(--accent); }
 		#tick-label { min-width: 92px; text-align: center; font-variant-numeric: tabular-nums; }
 		.detail { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; }
-		.inspection { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(330px, .75fr); gap: 14px; margin-bottom: 18px; }
+		.possibility-browser { display: grid; grid-template-columns: minmax(280px, .34fr) minmax(0, 1fr); min-height: 720px; overflow: hidden; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; }
+		.browser-sidebar { display: flex; flex-direction: column; min-width: 0; border-right: 1px solid var(--line); background: color-mix(in srgb, var(--surface-2) 55%, var(--surface)); }
+		.browser-sidebar-header { padding: 16px; border-bottom: 1px solid var(--line); }
+		.browser-sidebar-header h2 { margin: 0; font-size: 1rem; }
+		.browser-sidebar-header p { margin: 5px 0 0; color: var(--muted); font-size: .8rem; }
+		.tree-section { padding: 13px 10px 4px; }
+		.tree-section + .tree-section { border-top: 1px solid color-mix(in srgb, var(--line) 70%, transparent); }
+		.tree-section.grow { flex: 1; min-height: 0; padding-bottom: 12px; }
+		.tree-heading { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; margin: 0 6px 8px; color: var(--muted); font-size: .7rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+		.tree-heading span { font-weight: 500; letter-spacing: 0; text-transform: none; }
+		.tree-list { display: grid; gap: 4px; }
+		.tree-item { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; align-items: center; width: 100%; min-height: 42px; padding: 7px 9px; border-color: transparent; background: transparent; text-align: left; }
+		.tree-item:hover { background: var(--surface); }
+		.tree-item[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); box-shadow: inset 3px 0 var(--accent); }
+		.tree-icon { color: var(--muted); font: 700 .82rem ui-monospace, SFMono-Regular, Consolas, monospace; }
+		.tree-primary { min-width: 0; overflow: hidden; color: var(--text); font-size: .82rem; font-weight: 620; text-overflow: ellipsis; white-space: nowrap; }
+		.tree-secondary { color: var(--muted); font-size: .72rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+		.browser-page { min-width: 0; background: var(--surface); }
+		.page-header { display: flex; justify-content: space-between; gap: 20px; align-items: flex-start; min-height: 92px; padding: 15px 18px; border-bottom: 1px solid var(--line); }
+		.page-kicker { color: var(--accent); font-size: .72rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+		.page-header h2 { margin: 4px 0 2px; font-size: 1.12rem; }
+		.page-header p { margin: 0; color: var(--muted); font-size: .82rem; overflow-wrap: anywhere; }
+		.page-status { flex: 0 0 auto; margin-top: 5px; padding: 5px 9px; border: 1px solid currentColor; border-radius: 999px; font-size: .74rem; font-weight: 650; }
+		.page-content { display: grid; gap: 14px; padding: 16px; }
+		.page-section { min-width: 0; padding: 14px; border: 1px solid var(--line); border-radius: 12px; background: color-mix(in srgb, var(--surface-2) 28%, var(--surface)); }
+		.page-section > h3 { margin: 0 0 12px; font-size: .95rem; }
 		.window { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; min-width: 0; }
 		.window-header { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; padding: 14px 16px; border-bottom: 1px solid var(--line); }
 		.window-header h2 { margin: 0; font-size: 1rem; }
 		.window-header span { color: var(--muted); font-size: .82rem; text-align: right; }
-		.world-viewport { position: relative; height: 500px; background: var(--bg); }
+		.world-viewport { position: relative; height: 460px; background: var(--bg); border-bottom: 1px solid var(--line); }
 		.world-viewport canvas { display: block; width: 100%; height: 100%; }
 		.world-overlay { position: absolute; inset: auto 12px 12px 12px; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 18px; pointer-events: none; color: var(--muted); font-size: .78rem; }
 		.legend { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; }
@@ -1276,37 +1431,46 @@ final class PtrBranchingVisualizationTest {
 		.exact { color: var(--exact); }
 		.accepted { color: var(--accepted); }
 		.mismatch { color: var(--mismatch); }
+		.multi { color: var(--multi); }
 		.branch-body { padding: 14px; }
-		.branch-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(52px, 1fr)); gap: 7px; }
-		.branch-tile { position: relative; min-height: 42px; padding: 6px 4px; font: 600 .78rem ui-monospace, SFMono-Regular, Consolas, monospace; border-width: 1px; }
+		.branch-grid { display: grid; gap: 3px; max-height: 470px; overflow-y: auto; }
+		.candidate-row { display: grid; grid-template-columns: 24px minmax(0, 1fr); align-items: stretch; padding-left: calc(var(--depth) * 14px); }
+		.candidate-toggle { display: grid; place-items: center; width: 24px; min-height: 42px; padding: 0; border-color: transparent; background: transparent; color: var(--muted); font-size: .72rem; }
+		.candidate-toggle:hover { background: var(--surface); }
+		.candidate-toggle-placeholder { width: 24px; }
+		.branch-tile { position: relative; grid-template-columns: auto minmax(0, 1fr) auto; min-height: 42px; padding: 7px 9px; border-width: 1px; }
 		.branch-tile.fit-exact { color: var(--exact); border-color: color-mix(in srgb, var(--exact) 52%, var(--line)); background: color-mix(in srgb, var(--exact) 12%, var(--surface)); }
 		.branch-tile.fit-accepted { color: var(--accepted); border-color: color-mix(in srgb, var(--accepted) 52%, var(--line)); background: color-mix(in srgb, var(--accepted) 12%, var(--surface)); }
 		.branch-tile.fit-mismatch { color: var(--mismatch); border-color: color-mix(in srgb, var(--mismatch) 42%, var(--line)); background: color-mix(in srgb, var(--mismatch) 9%, var(--surface)); }
-		.branch-tile[aria-pressed="true"] { outline: 3px solid var(--accent); outline-offset: 1px; }
-		.branch-tile.production::after { content: "★"; position: absolute; top: 1px; right: 3px; color: var(--winner); font-family: inherit; }
+		.branch-tile[aria-pressed="true"] { border-color: var(--accent); outline: none; box-shadow: inset 3px 0 var(--accent); }
 		.branch-detail { margin-top: 14px; padding-top: 13px; border-top: 1px solid var(--line); }
 		.branch-detail strong { display: block; margin-bottom: 7px; }
 		.branch-detail p { margin: 5px 0; color: var(--muted); font-size: .84rem; overflow-wrap: anywhere; }
 		.branch-detail .fit-line { color: var(--text); font-size: .94rem; }
-		.graph-shell { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 16px 14px 8px; overflow-x: auto; }
+		.candidate-children { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
+		.candidate-children-heading { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; margin-bottom: 9px; }
+		.candidate-children-heading h3 { margin: 0; font-size: .9rem; }
+		.candidate-children-heading span { color: var(--muted); font-size: .76rem; }
+		.candidate-child-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 6px; }
+		.candidate-child-list .tree-item { border-color: var(--line); background: var(--surface); }
+		.candidate-empty { margin: 0; padding: 10px 12px; border-radius: 8px; background: var(--surface-2); color: var(--muted); font-size: .82rem; line-height: 1.45; }
+		.graph-shell { min-width: 0; overflow-x: auto; }
 		.graph-heading { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; padding: 0 4px 8px; }
 		.graph-heading h2 { margin: 0; font-size: 1rem; }
 		.graph-heading span { color: var(--muted); font-size: .82rem; }
-		#flow { display: block; width: 100%; min-width: 980px; min-height: 260px; }
-		#multi-flow { display: block; width: 100%; min-width: 720px; min-height: 190px; }
+		#flow { display: block; width: 100%; min-width: 920px; min-height: 260px; }
+		#multi-flow { display: block; width: 100%; min-width: 620px; min-height: 190px; }
 		.multi-edge { fill: none; stroke: var(--line); stroke-width: 2; }
 		.multi-edge.selected { stroke: var(--multi); stroke-width: 4; }
-		.multi-node { fill: var(--surface-2); stroke: var(--line); stroke-width: 2; }
+		.multi-node { fill: var(--surface-2); stroke: var(--line); stroke-width: 2; cursor: pointer; }
 		.multi-node.selected { fill: color-mix(in srgb, var(--multi) 16%, var(--surface)); stroke: var(--multi); stroke-width: 4; }
 		.multi-node.active { stroke: var(--accent); stroke-width: 4; }
 		.multi-node.selected.active { stroke: var(--winner); }
 		.multi-title { fill: var(--text); font-size: 12px; font-weight: 600; text-anchor: middle; }
 		.multi-count { fill: var(--text); font-size: 15px; font-weight: 700; text-anchor: middle; }
 		.multi-caption { fill: var(--muted); font-size: 10px; text-anchor: middle; }
-		.multi-layer-picker { display: flex; flex-wrap: wrap; gap: 7px; margin: 4px 4px 12px; }
-		.multi-layer-picker button { padding: 6px 10px; font-size: .8rem; }
-		.multi-layer-picker button[aria-pressed="true"] { color: var(--surface); background: var(--accent); border-color: var(--accent); }
-		.multi-inspector { display: grid; grid-template-columns: minmax(310px, .8fr) minmax(330px, 1.2fr); gap: 20px; margin: 0 4px 13px; padding: 14px 0; border-block: 1px solid var(--line); }
+		.multi-layer-picker { display: grid; gap: 4px; }
+		.multi-inspector { display: grid; grid-template-columns: minmax(280px, .8fr) minmax(300px, 1.2fr); gap: 20px; padding-top: 14px; border-top: 1px solid var(--line); }
 		.multi-inspector-heading { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; margin-bottom: 12px; }
 		.multi-inspector-heading span { color: var(--muted); font-size: .78rem; text-align: right; }
 		.multi-funnel { display: grid; gap: 9px; }
@@ -1318,7 +1482,7 @@ final class PtrBranchingVisualizationTest {
 		.multi-funnel-fill.accepted { background: var(--accepted); }
 		.multi-funnel-value { color: var(--text); font-variant-numeric: tabular-nums; white-space: nowrap; }
 		.multi-layer-metrics { align-content: start; }
-		.multi-path { display: grid; gap: 7px; margin: 5px 4px 10px; padding: 0; list-style: none; }
+		.multi-path { display: grid; gap: 7px; margin: 0; padding: 0; list-style: none; }
 		.multi-path li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: start; padding-top: 9px; border-top: 1px solid var(--line); color: var(--muted); font-size: .84rem; }
 		.multi-path strong { color: var(--multi); white-space: nowrap; }
 		.multi-path-main { display: grid; gap: 4px; min-width: 0; }
@@ -1334,6 +1498,10 @@ final class PtrBranchingVisualizationTest {
 		.flow-name { fill: var(--text); font-size: 12px; font-weight: 600; text-anchor: middle; pointer-events: none; }
 		.flow-count { fill: var(--text); font-size: 13px; font-weight: 700; text-anchor: middle; pointer-events: none; }
 		.flow-dot { fill: var(--accent); opacity: .48; pointer-events: none; }
+		.stage-drilldown { border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+		.stage-drilldown > summary { padding: 13px 15px; cursor: pointer; color: var(--text); font-size: .9rem; font-weight: 650; }
+		.stage-drilldown[open] > summary { border-bottom: 1px solid var(--line); }
+		.stage-drilldown-body { padding: 14px; }
 		.stage-picker { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0; }
 		.stage-picker button { padding: 6px 10px; font-size: .84rem; }
 		.stage-picker button[aria-pressed="true"] { color: var(--surface); background: var(--accent); border-color: var(--accent); }
@@ -1366,7 +1534,8 @@ final class PtrBranchingVisualizationTest {
 			.multi-path-outcome { text-align: left; }
 		}
 		@media (max-width: 940px) {
-			.inspection { grid-template-columns: 1fr; }
+			.possibility-browser { grid-template-columns: 1fr; }
+			.browser-sidebar { max-height: 520px; border-right: 0; border-bottom: 1px solid var(--line); }
 			.world-viewport { height: 430px; }
 		}
 		</style>
@@ -1381,7 +1550,7 @@ final class PtrBranchingVisualizationTest {
 		</head>
 		<body>
 		<main>
-			<h1>Physics search branching</h1>
+			<h1>Physics Branch Visualization</h1>
 			<p class="subtitle"><code>__RECORDING__</code> · protocol __CLIENT_PROTOCOL__ · server __SERVER_VERSION__</p>
 
 			<div class="toolbar" aria-label="Tick navigation">
@@ -1392,92 +1561,117 @@ final class PtrBranchingVisualizationTest {
 				<strong id="tick-label">Tick</strong>
 			</div>
 
-			<section class="inspection">
-				<div class="window">
-					<div class="window-header">
+			<section class="possibility-browser" aria-label="Physics possibility browser">
+				<aside class="browser-sidebar">
+					<header class="browser-sidebar-header">
+						<h2>Possibilities</h2>
+						<p>Choose an item to inspect it in the detailed view.</p>
+					</header>
+					<section class="tree-section">
+						<h3 class="tree-heading">Production route <span id="route-summary">Selected</span></h3>
+						<div id="multi-path-tree" class="tree-list" aria-label="Selected production route"></div>
+					</section>
+					<section class="tree-section">
+						<h3 class="tree-heading">Search layers <span id="multi-summary">Search</span></h3>
+						<div id="multi-layer-picker" class="multi-layer-picker" aria-label="Inspect a simulated tick layer"></div>
+					</section>
+					<section class="tree-section grow">
+						<h3 class="tree-heading">Candidate tree <span id="fit-summary">Possibilities</span></h3>
+						<div id="branch-grid" class="branch-grid" aria-label="Implicit and explicit candidates by simulated tick"></div>
+					</section>
+				</aside>
+
+				<article class="browser-page">
+					<header class="page-header">
 						<div>
-							<h2>Recorded world</h2>
-							<div class="legend" aria-label="3D player states">
-								<span class="legend-item"><span class="swatch" style="color: var(--muted)"></span>start</span>
-								<span class="legend-item exact"><span class="swatch"></span>recorded</span>
-								<span id="branch-legend" class="legend-item"><span class="swatch"></span><span id="branch-legend-label">branch</span></span>
-								<span class="legend-item multi"><span class="swatch"></span>production multi-tick path</span>
-							</div>
+							<span id="selection-kicker" class="page-kicker">Possibility</span>
+							<h2 id="selection-title">Selected possibility</h2>
+							<p id="selection-summary"></p>
+						</div>
+						<span id="selection-status" class="page-status">Selected</span>
+					</header>
+
+					<div class="window-header">
+						<div class="legend" aria-label="3D player states">
+							<span class="legend-item"><span class="swatch" style="color: var(--muted)"></span>start</span>
+							<span class="legend-item exact"><span class="swatch"></span>recorded</span>
+							<span id="branch-legend" class="legend-item"><span class="swatch"></span><span id="branch-legend-label">possibility</span></span>
+							<span class="legend-item multi"><span class="swatch"></span>production route</span>
 						</div>
 						<span id="world-origin">World origin</span>
 					</div>
-					<div id="world-viewport" class="world-viewport" aria-label="Interactive 3D view of the player and recorded collision environment">
+					<div id="world-viewport" class="world-viewport" aria-label="Interactive 3D view of the selected possibility">
 						<div class="world-overlay"><span>Drag to orbit · wheel to zoom · 1-block grid</span></div>
 					</div>
-				</div>
 
-				<div class="window">
-					<div class="window-header">
-						<div>
-							<h2>First-tick branches</h2>
-							<div class="legend" aria-label="Branch fit thresholds">
-								<span class="legend-item exact"><span class="swatch"></span>exact ≤ 0.0001</span>
-								<span class="legend-item accepted"><span class="swatch"></span>accepted ≤ 0.01</span>
-								<span class="legend-item mismatch"><span class="swatch"></span>mismatch</span>
+					<div class="page-content">
+						<section id="path-page" class="page-section">
+							<h3>Production route</h3>
+							<ol id="multi-path" class="multi-path" aria-label="Selected multi-tick path"></ol>
+						</section>
+
+						<section id="layer-page" class="page-section" hidden>
+							<div class="graph-heading">
+								<h3>Layer expansion</h3>
 							</div>
-						</div>
-						<span id="fit-summary">Branches</span>
+							<div class="graph-shell">
+								<svg id="multi-flow" role="img" aria-label="Search expansion across implicit client ticks"></svg>
+							</div>
+							<div class="multi-inspector">
+								<div>
+									<div class="multi-inspector-heading">
+										<strong id="multi-layer-title">Simulated tick</strong>
+										<span id="multi-layer-status">Candidate funnel</span>
+									</div>
+									<div id="multi-funnel" class="multi-funnel" aria-label="Candidate retention funnel"></div>
+								</div>
+								<dl id="multi-layer-metrics" class="metrics multi-layer-metrics"></dl>
+							</div>
+						</section>
+
+						<section id="branch-page" class="page-section" hidden>
+							<h3>Candidate state</h3>
+							<div class="branch-detail" aria-live="polite">
+								<strong id="branch-title" class="fit-line">Branch</strong>
+								<p id="branch-config"></p>
+								<p id="branch-motion"></p>
+								<p id="branch-finish"></p>
+							</div>
+							<div class="candidate-children">
+								<div class="candidate-children-heading">
+									<h3>Alternatives from this candidate</h3>
+									<span id="candidate-child-summary"></span>
+								</div>
+								<div id="candidate-children" class="candidate-child-list"></div>
+							</div>
+						</section>
+
+						<details id="stage-drilldown" class="stage-drilldown">
+							<summary>How first-tick alternatives were constructed</summary>
+							<div class="stage-drilldown-body">
+								<div class="graph-shell">
+									<svg id="flow" role="img" aria-label="Branch expansion across physics search stages"></svg>
+								</div>
+								<div id="stage-picker" class="stage-picker" aria-label="Inspect a branch stage"></div>
+								<section class="details">
+									<div class="detail">
+										<h2 id="stage-title">Stage</h2>
+										<p id="stage-summary" class="stage-summary"></p>
+										<div id="fanout"></div>
+									</div>
+									<div class="detail">
+										<h2>Configurations</h2>
+										<div id="winner" class="winner-box"></div>
+										<ol id="samples" class="samples"></ol>
+									</div>
+								</section>
+							</div>
+						</details>
 					</div>
-					<div class="branch-body">
-						<div id="branch-grid" class="branch-grid" aria-label="Final branches sorted by displacement fit"></div>
-						<div class="branch-detail" aria-live="polite">
-							<strong id="branch-title" class="fit-line">Branch</strong>
-							<p id="branch-config"></p>
-							<p id="branch-motion"></p>
-							<p id="branch-finish"></p>
-						</div>
-					</div>
-				</div>
+				</article>
 			</section>
 
-			<section class="graph-shell">
-				<div class="graph-heading">
-					<h2>Multi-tick search</h2>
-					<span id="multi-summary">Multi-tick search</span>
-				</div>
-				<svg id="multi-flow" role="img" aria-label="Search expansion across implicit client ticks"></svg>
-				<div id="multi-layer-picker" class="multi-layer-picker" aria-label="Inspect a simulated tick layer"></div>
-				<div class="multi-inspector">
-					<div>
-						<div class="multi-inspector-heading">
-							<strong id="multi-layer-title">Simulated tick</strong>
-							<span id="multi-layer-status">Candidate funnel</span>
-						</div>
-						<div id="multi-funnel" class="multi-funnel" aria-label="Candidate retention funnel"></div>
-					</div>
-					<dl id="multi-layer-metrics" class="metrics multi-layer-metrics"></dl>
-				</div>
-				<ol id="multi-path" class="multi-path" aria-label="Selected multi-tick path"></ol>
-			</section>
-
-			<section class="graph-shell">
-				<div class="graph-heading">
-					<h2>First-tick branch expansion</h2>
-				</div>
-				<svg id="flow" role="img" aria-label="Branch expansion across physics search stages"></svg>
-			</section>
-
-			<div id="stage-picker" class="stage-picker" aria-label="Inspect a branch stage"></div>
-
-			<section class="details">
-				<div class="detail">
-					<h2 id="stage-title">Stage</h2>
-					<p id="stage-summary" class="stage-summary"></p>
-					<div id="fanout"></div>
-				</div>
-				<div class="detail">
-					<h2>Configurations</h2>
-					<div id="winner" class="winner-box"></div>
-					<ol id="samples" class="samples"></ol>
-				</div>
-			</section>
-
-			<p class="explainer">Branches are valid client explanations, not proof of one uniquely observed input. Multi-tick intermediates only need to remain omission-safe.</p>
+			<p class="explainer">The production route is the simulation actually selected. The candidate tree diagnostically replays every unique omission-safe continuation for up to three ticks; equivalent candidates remain visible as merged nodes without duplicating the same child tree.</p>
 		</main>
 
 		<script type="module">
@@ -1499,6 +1693,10 @@ final class PtrBranchingVisualizationTest {
 			stageIndex: 0,
 			multiLayerIndex: 0,
 			branchIndex: 0,
+			candidateId: -1,
+			expandedCandidates: new Set(),
+			pathIndex: 0,
+			focusKind: 'path',
 			progress: 1,
 			playing: false
 		};
@@ -1707,13 +1905,12 @@ final class PtrBranchingVisualizationTest {
 			'BIRCH_LEAVES', 'BUSH', 'CHERRY_LEAVES', 'LEGACY_LEAVES_2',
 			'LEGACY_LONG_GRASS', 'OAK_LEAVES', 'SHORT_GRASS', 'TALL_GRASS'
 		]);
+		const solidRenderBlocks = new Set(['LAVA', 'SLIME_BLOCK']);
 		const translucentBlocks = Object.freeze({
 			BARRIER: .72,
 			BUBBLE_COLUMN: .56,
 			GLASS: .32,
 			HONEY_BLOCK: .82,
-			LAVA: .86,
-			SLIME_BLOCK: .78,
 			WATER: .56
 		});
 
@@ -1839,7 +2036,7 @@ final class PtrBranchingVisualizationTest {
 				color: tint,
 				emissive,
 				emissiveIntensity: emissive ? .35 : 0,
-				transparent: opacity < 1 || alphaTest > 0,
+				transparent: opacity < 1,
 				opacity,
 				alphaTest,
 				roughness: .92,
@@ -1892,7 +2089,9 @@ final class PtrBranchingVisualizationTest {
 			const geometry = new THREE.BoxGeometry(1, 1, 1);
 			if (material === 'PLAYER_HEAD') setSkinUVs(geometry, 0, 0, 8, 8, 8);
 			if (material === 'SKELETON_SKULL') setSkinUVs(geometry, 0, 0, 8, 8, 8, 64, 32);
-			const opacity = collidable ? faces.opacity : Math.min(faces.opacity, .72);
+			const opacity = collidable || solidRenderBlocks.has(material)
+				? faces.opacity
+				: Math.min(faces.opacity, .72);
 			const materials = [
 				faceMaterial(faces.side, opacity, faces.sideTint, faces.alphaTest, faces.emissive),
 				faceMaterial(faces.side, opacity, faces.sideTint, faces.alphaTest, faces.emissive),
@@ -2332,6 +2531,36 @@ final class PtrBranchingVisualizationTest {
 			player.elytra.right.rotation.set(wingX, -wingY, -wingZ);
 		}
 
+		function focusedPossibility(tick) {
+			if (state.focusKind === 'candidate') {
+				const candidate = tick.multiTick.candidates.find(candidate => candidate.id === state.candidateId);
+				if (candidate) {
+					return {
+						motion: [candidate.x, candidate.y, candidate.z],
+						loss: candidate.loss,
+						label: `candidate tick ${candidate.depth + 1}`
+					};
+				}
+			}
+			const path = tick.multiTick.path;
+			const requestedIndex = state.focusKind === 'layer'
+				? state.multiLayerIndex
+				: state.pathIndex;
+			const pathIndex = Math.max(0, Math.min(path.length - 1, requestedIndex));
+			const step = path[pathIndex];
+			if (step) {
+				return {
+					motion: [step.x, step.y, step.z],
+					loss: step.loss,
+					label: `production tick ${step.depth + 1}`
+				};
+			}
+			const fallback = tick.branches[state.branchIndex] ?? tick.branches[0];
+			return fallback
+				? { motion: [fallback.x, fallback.y, fallback.z], loss: fallback.loss, label: 'closest branch' }
+				: { motion: [0, 0, 0], loss: tick.loss, label: 'possibility' };
+		}
+
 		function updateWorldInterpolation(tick) {
 			if (!worldActors) return;
 			const rawProgress = reducedMotion
@@ -2339,10 +2568,9 @@ final class PtrBranchingVisualizationTest {
 				: Math.max(0, Math.min(1, state.progress));
 			const progress = rawProgress * rawProgress * (3 - 2 * rawProgress);
 			const origin = originOffset(state.tickIndex);
-			const branch = tick.branches[state.branchIndex];
-			if (!branch) return;
+			const possibility = focusedPossibility(tick);
 			const recordedMotion = [tick.actualX, tick.actualY, tick.actualZ];
-			const predictedMotion = [branch.x, branch.y, branch.z];
+			const predictedMotion = possibility.motion;
 			const recordedPosition = moved(origin, recordedMotion, progress);
 			const predictedPosition = moved(origin, predictedMotion, progress);
 			setHitboxPosition(worldActors.startHitbox, origin, tick.environment.playerHeight);
@@ -2371,8 +2599,7 @@ final class PtrBranchingVisualizationTest {
 		function renderWorld(tick) {
 			const origin = originOffset(state.tickIndex);
 			renderTerrain(tick, origin);
-			const branch = tick.branches[state.branchIndex];
-			if (!branch) return;
+			const possibility = focusedPossibility(tick);
 			const width = tick.environment.playerWidth;
 			const height = tick.environment.playerHeight;
 			if (renderedPathTick !== state.tickIndex) {
@@ -2380,10 +2607,10 @@ final class PtrBranchingVisualizationTest {
 				addMultiTickPath(tick, origin, width, height);
 				renderedPathTick = state.tickIndex;
 			}
-			const fit = fitOf(branch.loss);
+			const fit = fitOf(possibility.loss);
 			const branchLegend = document.getElementById('branch-legend');
 			branchLegend.className = `legend-item ${fit.key}`;
-			document.getElementById('branch-legend-label').textContent = `branch #${state.branchIndex + 1} · ${fit.label.toLowerCase()}`;
+			document.getElementById('branch-legend-label').textContent = `${possibility.label} · ${fit.label.toLowerCase()}`;
 			if (!worldActors) {
 				worldActors = {
 					startHitbox: addHitbox(origin, width, height, darkTheme ? 0x9da7b2 : 0x657180, .42),
@@ -2425,8 +2652,7 @@ final class PtrBranchingVisualizationTest {
 					playbackStartedAt += advance * TICK_DURATION_MS;
 					tickProgress -= advance;
 					state.stageIndex = 0;
-					state.branchIndex = defaultBranchIndex(trace[state.tickIndex]);
-					state.multiLayerIndex = defaultMultiLayerIndex(trace[state.tickIndex]);
+					resetPossibilityFocus(trace[state.tickIndex]);
 					state.progress = Math.min(1, tickProgress);
 					render(false);
 				}
@@ -2451,16 +2677,18 @@ final class PtrBranchingVisualizationTest {
 			if (!tick) return;
 			state.stageIndex = Math.min(state.stageIndex, tick.stages.length - 1);
 			state.branchIndex = Math.min(state.branchIndex, tick.branches.length - 1);
+			state.pathIndex = Math.min(state.pathIndex, Math.max(0, tick.multiTick.path.length - 1));
 			tickInput.value = String(state.tickIndex);
 			previous.disabled = state.tickIndex === 0;
 			next.disabled = state.tickIndex === trace.length - 1;
 			document.getElementById('tick-label').textContent = `Tick ${tick.tick} · ${state.tickIndex + 1}/${trace.length}`;
 			if (includeDetails) {
 				renderPicker(tick);
-				renderGraph(tick);
-				renderMultiTick(tick);
 				renderStage(tick);
 				renderBranches(tick);
+				renderSelection(tick);
+				renderGraph(tick);
+				renderMultiTick(tick);
 			}
 			renderWorld(tick);
 		}
@@ -2474,41 +2702,213 @@ final class PtrBranchingVisualizationTest {
 			return Math.min(tick.multiTick.selectedDepth, tick.multiTick.layers.length - 1);
 		}
 
-		function renderBranches(tick) {
-			const grid = document.getElementById('branch-grid');
-			grid.replaceChildren();
-			tick.branches.forEach((branch, index) => {
-				const fit = fitOf(branch.loss);
-				const button = document.createElement('button');
-				button.type = 'button';
-				button.className = `branch-tile fit-${fit.key}${branch.selected ? ' production' : ''}`;
-				button.textContent = `#${index + 1}`;
-				button.setAttribute('aria-pressed', String(index === state.branchIndex));
-				button.setAttribute(
-					'aria-label',
-					`Branch ${index + 1}: ${fit.label}, loss ${formatDecimal(branch.loss)}, ${branch.config}${branch.selected ? ', production winner' : ''}`
-				);
-				button.addEventListener('click', () => {
-					stopForManualNavigation();
-					state.branchIndex = index;
-					renderBranches(tick);
-					renderWorld(tick);
-				});
-				grid.append(button);
-			});
+		function resetPossibilityFocus(tick) {
+			state.branchIndex = defaultBranchIndex(tick);
+			state.multiLayerIndex = defaultMultiLayerIndex(tick);
+			state.pathIndex = Math.max(0, tick.multiTick.path.length - 1);
+			const selectedCandidate = tick.multiTick.candidates.find(candidate => candidate.selected)
+				?? tick.multiTick.candidates[0];
+			state.candidateId = selectedCandidate?.id ?? -1;
+			state.expandedCandidates = new Set(
+				tick.multiTick.candidates
+					.filter(candidate => candidate.production)
+					.map(candidate => candidate.id)
+			);
+			state.focusKind = tick.multiTick.selectedPathFound ? 'path' : 'candidate';
+		}
 
-			document.getElementById('fit-summary').textContent = `${tick.branches.length.toLocaleString()} branches`;
-			const branch = tick.branches[state.branchIndex];
-			if (!branch) return;
-			const fit = fitOf(branch.loss);
+		function retentionLabel(candidate) {
+			return {
+				'expanded': 'implicit · expanded',
+				'retained': 'implicit · retained',
+				'merged': 'implicit · merged',
+				'depth-limit': 'implicit · depth limit',
+				'explicit-only': 'explicit only'
+			}[candidate.retention] ?? candidate.retention;
+		}
+
+		function candidateGroups(tick) {
+			const groups = new Map();
+			for (const candidate of tick.multiTick.candidates) {
+				if (!groups.has(candidate.parent)) groups.set(candidate.parent, []);
+				groups.get(candidate.parent).push(candidate);
+			}
+			for (const candidates of groups.values()) {
+				candidates.sort((left, right) => left.loss - right.loss || left.key.localeCompare(right.key));
+			}
+			return groups;
+		}
+
+		function selectCandidate(candidate) {
+			stopForManualNavigation();
+			state.focusKind = 'candidate';
+			state.candidateId = candidate.id;
+			if (candidate.retention === 'expanded') {
+				state.expandedCandidates.add(candidate.id);
+			}
+			render();
+		}
+
+		function candidateButton(candidate, compact = false) {
+			const fit = fitOf(candidate.loss);
+			const button = document.createElement('button');
+			button.type = 'button';
+			button.className = `tree-item branch-tile fit-${fit.key}${candidate.selected ? ' production' : ''}`;
+			const icon = document.createElement('span');
+			icon.className = 'tree-icon';
+			icon.textContent = candidate.selected ? '★' : candidate.production ? '●' : candidate.implicitEligible ? '≈' : '◇';
+			const name = document.createElement('span');
+			name.className = 'tree-primary';
+			name.textContent = `${compact ? '' : `Tick ${candidate.depth + 1} · `}${candidate.config}`;
+			const meta = document.createElement('span');
+			meta.className = `tree-secondary ${candidate.implicitEligible ? 'multi' : fit.key}`;
+			meta.textContent = candidate.implicitEligible ? 'implicit' : fit.label;
+			button.append(icon, name, meta);
+			button.setAttribute('aria-pressed', String(state.focusKind === 'candidate' && candidate.id === state.candidateId));
+			button.setAttribute(
+				'aria-label',
+				`Tick ${candidate.depth + 1} candidate: ${candidate.config}, ${retentionLabel(candidate)}, loss ${formatDecimal(candidate.loss)}${candidate.selected ? ', production selection' : ''}`
+			);
+			button.addEventListener('click', () => selectCandidate(candidate));
+			return button;
+		}
+
+		function renderCandidateDetail(tick, groups) {
+			const candidates = tick.multiTick.candidates;
+			let candidate = candidates.find(candidate => candidate.id === state.candidateId);
+			if (!candidate) {
+				candidate = candidates.find(candidate => candidate.selected) ?? candidates[0];
+				state.candidateId = candidate?.id ?? -1;
+			}
+			const children = candidate ? groups.get(candidate.id) ?? [] : [];
+			const childList = document.getElementById('candidate-children');
+			childList.replaceChildren();
+			document.getElementById('candidate-child-summary').textContent = `${children.length.toLocaleString()} direct`;
+			if (!candidate) {
+				const empty = document.createElement('p');
+				empty.className = 'candidate-empty';
+				empty.textContent = 'No diagnostic candidates were generated.';
+				childList.append(empty);
+				return;
+			}
+
+			const fit = fitOf(candidate.loss);
 			const title = document.getElementById('branch-title');
 			title.className = `fit-line ${fit.key}`;
-			title.textContent = `#${state.branchIndex + 1} · ${fit.label} · loss ${formatDecimal(branch.loss, 7)}${branch.selected ? ' · winner' : ''}`;
-			document.getElementById('branch-config').textContent = `${branch.key} · ${branch.config}`;
-			document.getElementById('branch-motion').textContent = `(${branch.x.toFixed(6)}, ${branch.y.toFixed(6)}, ${branch.z.toFixed(6)}) → ${tick.actual}`;
-			document.getElementById('branch-finish').textContent = branch.finishable
-				? ''
-				: 'Implicit-only branch';
+			title.textContent = `${fit.label} · loss ${formatDecimal(candidate.loss, 7)}${candidate.selected ? ' · production selection' : ''}`;
+			document.getElementById('branch-config').textContent = `${candidate.key} · search tick ${candidate.depth + 1} · ${retentionLabel(candidate)}`;
+			document.getElementById('branch-motion').textContent = `motion ${candidate.motion} → accumulated position (${candidate.x.toFixed(6)}, ${candidate.y.toFixed(6)}, ${candidate.z.toFixed(6)})`;
+			const comparison = candidate.implicitEligible ? '<' : '≥';
+			document.getElementById('branch-finish').textContent = `${candidate.implicitEligible ? 'Implicit-eligible' : 'Explicit-only'}: omission ${formatDecimal(candidate.omissionDistance, 5)} ${comparison} ${formatDecimal(tick.multiTick.omissionLimit, 5)}${candidate.finishable ? '' : ' · cannot finish an explicit tick'}`;
+
+			if (children.length) {
+				children.forEach(child => childList.append(candidateButton(child, true)));
+				return;
+			}
+			const empty = document.createElement('p');
+			empty.className = 'candidate-empty';
+			empty.textContent = {
+				'merged': 'This implicit candidate reached a state equivalent to another candidate, so that equivalent node owns the continuation.',
+				'depth-limit': 'This candidate is still implicit-eligible; the diagnostic stops at the client’s three-tick search horizon.',
+				'explicit-only': 'This state is not omission-safe, so the search cannot continue implicitly from it.'
+			}[candidate.retention] ?? 'No distinct child alternatives were generated.';
+			childList.append(empty);
+		}
+
+		function renderBranches(tick) {
+			const grid = document.getElementById('branch-grid');
+			const groups = candidateGroups(tick);
+			grid.replaceChildren();
+			const appendChildren = (parentId, depth) => {
+				for (const candidate of groups.get(parentId) ?? []) {
+					const children = groups.get(candidate.id) ?? [];
+					const row = document.createElement('div');
+					row.className = 'candidate-row';
+					row.style.setProperty('--depth', depth);
+					if (children.length) {
+						const toggle = document.createElement('button');
+						toggle.type = 'button';
+						toggle.className = 'candidate-toggle';
+						const expanded = state.expandedCandidates.has(candidate.id);
+						toggle.textContent = expanded ? '▾' : '▸';
+						toggle.setAttribute('aria-label', `${expanded ? 'Collapse' : 'Expand'} alternatives from ${candidate.config}`);
+						toggle.setAttribute('aria-expanded', String(expanded));
+						toggle.addEventListener('click', () => {
+							if (expanded) state.expandedCandidates.delete(candidate.id);
+							else state.expandedCandidates.add(candidate.id);
+							render();
+						});
+						row.append(toggle);
+					} else {
+						const placeholder = document.createElement('span');
+						placeholder.className = 'candidate-toggle-placeholder';
+						row.append(placeholder);
+					}
+					row.append(candidateButton(candidate));
+					grid.append(row);
+					if (children.length && state.expandedCandidates.has(candidate.id)) {
+						appendChildren(candidate.id, depth + 1);
+					}
+				}
+			};
+			appendChildren(-1, 0);
+
+			const roots = groups.get(-1) ?? [];
+			document.getElementById('fit-summary').textContent = `${roots.length.toLocaleString()} roots · ${tick.multiTick.candidates.length.toLocaleString()} total`;
+			renderCandidateDetail(tick, groups);
+		}
+
+		function renderSelection(tick) {
+			const pathPage = document.getElementById('path-page');
+			const layerPage = document.getElementById('layer-page');
+			const branchPage = document.getElementById('branch-page');
+			const stageDrilldown = document.getElementById('stage-drilldown');
+			const candidate = tick.multiTick.candidates.find(candidate => candidate.id === state.candidateId);
+			pathPage.hidden = state.focusKind !== 'path';
+			layerPage.hidden = state.focusKind !== 'layer';
+			branchPage.hidden = state.focusKind !== 'candidate';
+			stageDrilldown.hidden = state.focusKind !== 'candidate' || candidate?.depth !== 0;
+
+			const kicker = document.getElementById('selection-kicker');
+			const title = document.getElementById('selection-title');
+			const summary = document.getElementById('selection-summary');
+			const status = document.getElementById('selection-status');
+			if (state.focusKind === 'candidate' && candidate) {
+				const fit = fitOf(candidate.loss);
+				kicker.textContent = candidate.implicitEligible ? 'Implicit candidate' : 'Explicit candidate';
+				title.textContent = `Search tick ${candidate.depth + 1} · ${candidate.config}`;
+				summary.textContent = `${candidate.key} · motion ${candidate.motion} · accumulated position (${candidate.x.toFixed(5)}, ${candidate.y.toFixed(5)}, ${candidate.z.toFixed(5)})`;
+				status.className = `page-status ${candidate.implicitEligible ? 'multi' : fit.key}`;
+				status.textContent = candidate.selected
+					? `${fit.label} · production selection`
+					: retentionLabel(candidate);
+				return;
+			}
+			if (state.focusKind === 'layer') {
+				const layer = tick.multiTick.layers[state.multiLayerIndex];
+				const finalLayer = state.multiLayerIndex === tick.multiTick.layers.length - 1;
+				const diagnosticContinuation = layer.depth > tick.multiTick.selectedDepth;
+				kicker.textContent = 'Search layer';
+				title.textContent = `Search tick ${layer.depth + 1}`;
+				summary.textContent = `${layer.simulations.toLocaleString()} candidates from ${layer.parents.toLocaleString()} parent${layer.parents === 1 ? '' : 's'} · ${layer.selected ? 'contains the production selection' : finalLayer ? `${layer.finishable.toLocaleString()} explicit at the horizon` : `${layer.retained.toLocaleString()} continued implicitly`}`;
+				const layerFit = fitOf(layer.selectedLoss >= 0 ? layer.selectedLoss : layer.bestLoss);
+				status.className = `page-status ${layer.selected ? layerFit.key : ''}`;
+				status.textContent = layer.selected
+					? `Production selected · ${layerFit.label}`
+					: diagnosticContinuation ? 'Diagnostic continuation' : finalLayer ? 'Three-tick horizon' : 'Implicit search';
+				return;
+			}
+			const step = tick.multiTick.path[state.pathIndex] ?? tick.multiTick.path.at(-1);
+			const fit = fitOf(step?.loss ?? tick.loss);
+			kicker.textContent = 'Production route';
+			title.textContent = step ? `Search tick ${step.depth + 1} · ${step.config}` : 'Selected production possibility';
+			summary.textContent = step
+				? `${step.key} · motion ${step.motion} · accumulated position (${step.x.toFixed(5)}, ${step.y.toFixed(5)}, ${step.z.toFixed(5)})`
+				: 'The selected production route could not be reconstructed.';
+			status.className = `page-status ${fit.key}`;
+			status.textContent = state.pathIndex < tick.multiTick.path.length - 1
+				? 'Implicit continuation'
+				: `${fit.label} · selected`;
 		}
 
 		function renderPicker(tick) {
@@ -2586,8 +2986,10 @@ final class PtrBranchingVisualizationTest {
 		function renderMultiLayerDetail(multiTick, layer, isFinalLayer) {
 			document.getElementById('multi-layer-title').textContent = `Tick ${layer.depth + 1}`;
 			document.getElementById('multi-layer-status').textContent = layer.selected
-				? 'selected'
-				: isFinalLayer ? 'explicit report' : 'implicit continuation';
+				? 'production selected'
+				: layer.depth > multiTick.selectedDepth
+					? 'diagnostic continuation'
+					: isFinalLayer ? 'three-tick horizon' : 'implicit continuation';
 
 			const funnel = document.getElementById('multi-funnel');
 			funnel.replaceChildren();
@@ -2648,7 +3050,8 @@ final class PtrBranchingVisualizationTest {
 			state.multiLayerIndex = Math.min(state.multiLayerIndex, layers.length - 1);
 			const finalStep = multiTick.path.at(-1);
 			const finalFit = fitOf(finalStep?.loss ?? tick.loss);
-			document.getElementById('multi-summary').textContent = `${multiTick.productionSimulations.toLocaleString()} production simulations · ${finalFit.label.toLowerCase()}`;
+			document.getElementById('multi-summary').textContent = `${layers.length} tick${layers.length === 1 ? '' : 's'} explored`;
+			document.getElementById('route-summary').textContent = `${finalFit.label} · ${multiTick.productionSimulations.toLocaleString()} sims`;
 
 			const width = Math.max(720, multiSvg.clientWidth || 720);
 			const height = 190;
@@ -2672,7 +3075,7 @@ final class PtrBranchingVisualizationTest {
 					const spread = strands === 1 ? 0 : (strand / (strands - 1) - .5) * 58;
 					multiSvg.append(element('path', {
 						d: `M ${x1} ${centerY} C ${(x1 + x2) / 2} ${centerY + spread}, ${(x1 + x2) / 2} ${centerY + spread}, ${x2} ${centerY}`,
-						class: `multi-edge${multiTick.selectedPathFound && strand === Math.floor(strands / 2) ? ' selected' : ''}`
+						class: `multi-edge${multiTick.selectedPathFound && index < multiTick.path.length && strand === Math.floor(strands / 2) ? ' selected' : ''}`
 					}));
 				}
 				const edgeLabel = element('text', {
@@ -2688,13 +3091,20 @@ final class PtrBranchingVisualizationTest {
 			layers.forEach((layer, index) => {
 				const x = xAt(index);
 				const r = radius(layer);
-				multiSvg.append(element('circle', {
+				const circle = element('circle', {
 					cx: x,
 					cy: centerY,
 					r,
 					class: `multi-node${layer.selected ? ' selected' : ''}${index === state.multiLayerIndex ? ' active' : ''}`,
 					'aria-label': `Tick ${layer.depth + 1}: ${layer.simulations} candidates${layer.selected ? ', selected' : ''}`
-				}));
+				});
+				circle.addEventListener('click', () => {
+					stopForManualNavigation();
+					state.focusKind = 'layer';
+					state.multiLayerIndex = index;
+					render();
+				});
+				multiSvg.append(circle);
 				const title = element('text', { x, y: 27, class: 'multi-title' });
 				title.textContent = `Tick ${layer.depth + 1}`;
 				multiSvg.append(title);
@@ -2713,14 +3123,24 @@ final class PtrBranchingVisualizationTest {
 
 			const layerPicker = document.getElementById('multi-layer-picker');
 			layerPicker.replaceChildren();
-			layerPicker.hidden = layers.length === 1;
 			layers.forEach((layer, index) => {
 				const button = document.createElement('button');
 				button.type = 'button';
-				button.textContent = `Tick ${layer.depth + 1}`;
-				button.setAttribute('aria-pressed', String(index === state.multiLayerIndex));
+				button.className = 'tree-item';
+				const icon = document.createElement('span');
+				icon.className = 'tree-icon';
+				icon.textContent = layer.selected ? '★' : index < layers.length - 1 ? '▸' : '◆';
+				const name = document.createElement('span');
+				name.className = 'tree-primary';
+				name.textContent = `Search tick ${layer.depth + 1}`;
+				const meta = document.createElement('span');
+				meta.className = 'tree-secondary';
+				meta.textContent = `${layer.simulations.toLocaleString()} candidates`;
+				button.append(icon, name, meta);
+				button.setAttribute('aria-pressed', String(state.focusKind === 'layer' && index === state.multiLayerIndex));
 				button.addEventListener('click', () => {
 					stopForManualNavigation();
+					state.focusKind = 'layer';
 					state.multiLayerIndex = index;
 					render();
 				});
@@ -2733,16 +3153,44 @@ final class PtrBranchingVisualizationTest {
 			);
 
 			const pathList = document.getElementById('multi-path');
+			const pathTree = document.getElementById('multi-path-tree');
 			pathList.replaceChildren();
-			pathList.hidden = multiTick.selectedDepth === 0;
-			if (pathList.hidden) return;
+			pathTree.replaceChildren();
 			if (!multiTick.selectedPathFound) {
 				const item = document.createElement('li');
 				item.textContent = 'Selected path was not retained by the diagnostic search.';
 				pathList.append(item);
+				const unavailable = document.createElement('span');
+				unavailable.className = 'tree-secondary';
+				unavailable.textContent = 'Unavailable';
+				pathTree.append(unavailable);
 				return;
 			}
 			multiTick.path.forEach((step, index) => {
+				const treeButton = document.createElement('button');
+				treeButton.type = 'button';
+				treeButton.className = 'tree-item';
+				const treeIcon = document.createElement('span');
+				treeIcon.className = 'tree-icon';
+				treeIcon.textContent = index === multiTick.path.length - 1 ? '★' : '↳';
+				const treeName = document.createElement('span');
+				treeName.className = 'tree-primary';
+				treeName.textContent = `Tick ${step.depth + 1} · ${step.config}`;
+				const treeMeta = document.createElement('span');
+				treeMeta.className = 'tree-secondary';
+				treeMeta.textContent = index === multiTick.path.length - 1
+					? fitOf(step.loss).label
+					: 'implicit';
+				treeButton.append(treeIcon, treeName, treeMeta);
+				treeButton.setAttribute('aria-pressed', String(state.focusKind === 'path' && index === state.pathIndex));
+				treeButton.addEventListener('click', () => {
+					stopForManualNavigation();
+					state.focusKind = 'path';
+					state.pathIndex = index;
+					render();
+				});
+				pathTree.append(treeButton);
+
 				const item = document.createElement('li');
 				const label = document.createElement('strong');
 				label.textContent = `Tick ${step.depth + 1}`;
@@ -2819,24 +3267,21 @@ final class PtrBranchingVisualizationTest {
 			stopForManualNavigation();
 			state.tickIndex = Number(event.target.value);
 			state.stageIndex = 0;
-			state.branchIndex = defaultBranchIndex(trace[state.tickIndex]);
-			state.multiLayerIndex = defaultMultiLayerIndex(trace[state.tickIndex]);
+			resetPossibilityFocus(trace[state.tickIndex]);
 			render();
 		});
 		previous.addEventListener('click', () => {
 			stopForManualNavigation();
 			state.tickIndex = Math.max(0, state.tickIndex - 1);
 			state.stageIndex = 0;
-			state.branchIndex = defaultBranchIndex(trace[state.tickIndex]);
-			state.multiLayerIndex = defaultMultiLayerIndex(trace[state.tickIndex]);
+			resetPossibilityFocus(trace[state.tickIndex]);
 			render();
 		});
 		next.addEventListener('click', () => {
 			stopForManualNavigation();
 			state.tickIndex = Math.min(trace.length - 1, state.tickIndex + 1);
 			state.stageIndex = 0;
-			state.branchIndex = defaultBranchIndex(trace[state.tickIndex]);
-			state.multiLayerIndex = defaultMultiLayerIndex(trace[state.tickIndex]);
+			resetPossibilityFocus(trace[state.tickIndex]);
 			render();
 		});
 		play.addEventListener('click', () => {
@@ -2848,8 +3293,7 @@ final class PtrBranchingVisualizationTest {
 			if (state.tickIndex === trace.length - 1 && state.progress >= 1) {
 				state.tickIndex = 0;
 				state.stageIndex = 0;
-				state.branchIndex = defaultBranchIndex(trace[0]);
-				state.multiLayerIndex = defaultMultiLayerIndex(trace[0]);
+				resetPossibilityFocus(trace[0]);
 				state.progress = 0;
 				render();
 			} else if (state.progress >= 1) {
@@ -2862,8 +3306,7 @@ final class PtrBranchingVisualizationTest {
 			renderGraph(trace[state.tickIndex]);
 			renderMultiTick(trace[state.tickIndex]);
 		});
-		state.branchIndex = defaultBranchIndex(trace[state.tickIndex]);
-		state.multiLayerIndex = defaultMultiLayerIndex(trace[state.tickIndex]);
+		resetPossibilityFocus(trace[state.tickIndex]);
 		render();
 		</script>
 		</body>
