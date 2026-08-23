@@ -90,8 +90,20 @@ public final class MovementRecording {
 		frameAttributes.add(new HashMap<>(attributes));
 	}
 
-	public void insertFrame(BoundingBox boundingBox, Input input, @Nullable Position position, @Nullable Rotation rotation, BlockCache blockCache, Map<String, Attribute> attributes, boolean gliding, @Nullable Pose physicalPose, MovementFrameState frameState) {
-		Map<BlockPosition, MaterialVariantStore> dirtyBlocks = insertAndDelta(nearbyBlocks(blockCache, boundingBox, position));
+	public void insertFrame(
+		BoundingBox boundingBox,
+		Input input,
+		@Nullable Position position,
+		@Nullable Rotation rotation,
+		BlockCache blockCache,
+		Map<String, Attribute> attributes,
+		boolean gliding,
+		@Nullable Pose physicalPose,
+		MovementFrameState frameState
+	) {
+		Map<BlockPosition, MaterialVariantStore> dirtyBlocks = insertAndDelta(
+			nearbyBlocks(blockCache, boundingBox, position)
+		);
 		appendFrame(new MoveFrame(
 			position, rotation, dirtyBlocks, input, gliding, physicalPose,
 			Objects.requireNonNull(frameState, "frameState")

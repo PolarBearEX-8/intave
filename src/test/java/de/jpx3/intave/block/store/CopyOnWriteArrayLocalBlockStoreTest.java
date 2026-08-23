@@ -14,6 +14,8 @@ package de.jpx3.intave.block.store;
 import de.jpx3.intave.share.BlockState;
 import org.junit.jupiter.api.Test;
 
+import java.util.concurrent.*;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 class CopyOnWriteArrayLocalBlockStoreTest {
@@ -33,6 +35,129 @@ class CopyOnWriteArrayLocalBlockStoreTest {
 			} else {
 				assertFalse(store.put(i, 0, 0, BlockState.stone()));
 			}
+		}
+	}
+
+	@Test
+	public void testReadOutsideUpperVerticalBoundary() {
+		CopyOnWriteArrayLocalBlockStore store = CopyOnWriteArrayLocalBlockStore.of();
+		assertTrue(store.put(0, 0, 0, BlockState.stone()));
+
+		// This lookup must be outside the 384-block-tall store. Its sector index used to be 12425.
+		assertNull(store.get(8, 320, 0));
+	}
+
+	@Test
+	public void testVerticalBoundaries() {
+		CopyOnWriteArrayLocalBlockStore store = CopyOnWriteArrayLocalBlockStore.of();
+		assertTrue(store.put(0, -64, 0, BlockState.stone()));
+		assertTrue(store.put(0, 319, 0, BlockState.stone()));
+
+		assertEquals(BlockState.stone(), store.get(0, -64, 0));
+		assertEquals(BlockState.stone(), store.get(0, 319, 0));
+		assertFalse(store.put(0, -65, 0, BlockState.stone()));
+		assertFalse(store.put(0, 320, 0, BlockState.stone()));
+		assertNull(store.get(0, -65, 0));
+		assertNull(store.get(0, 320, 0));
+		assertEquals(2, store.size());
+	}
+
+	@Test
+	public void testSectorArrayBoundaries() {
+		CopyOnWriteArrayLocalBlockStore store = CopyOnWriteArrayLocalBlockStore.of();
+		assertTrue(store.put(0, 0, 0, BlockState.stone()));
+		assertTrue(store.put(-64, -64, -64, BlockState.stone()));
+		assertTrue(store.put(63, 319, 63, BlockState.stone()));
+
+		assertEquals(BlockState.stone(), store.get(-64, -64, -64));
+		assertEquals(BlockState.stone(), store.get(63, 319, 63));
+		assertFalse(store.put(-65, 0, 0, BlockState.stone()));
+		assertFalse(store.put(64, 0, 0, BlockState.stone()));
+		assertFalse(store.put(0, 0, -65, BlockState.stone()));
+		assertFalse(store.put(0, 0, 64, BlockState.stone()));
+		assertNull(store.get(-65, 0, 0));
+		assertNull(store.get(64, 0, 0));
+		assertNull(store.get(0, 0, -65));
+		assertNull(store.get(0, 0, 64));
+	}
+
+	@Test
+	public void testConcurrentClearAndRemoveIfPreserveSize() throws Exception {
+		CopyOnWriteArrayLocalBlockStore store = CopyOnWriteArrayLocalBlockStore.of();
+		assertTrue(store.put(0, 0, 0, BlockState.stone()));
+
+		CountDownLatch predicateEntered = new CountDownLatch(1);
+		CountDownLatch continueRemoval = new CountDownLatch(1);
+		ExecutorService executor = Executors.newSingleThreadExecutor();
+		Future<?> removal = executor.submit(() -> store.removeIf(state -> {
+			predicateEntered.countDown();
+			try {
+				if (!continueRemoval.await(5, TimeUnit.SECONDS)) {
+					throw new AssertionError("Timed out waiting to resume removal");
+				}
+			} catch (InterruptedException exception) {
+				Thread.currentThread().interrupt();
+				throw new AssertionError(exception);
+			}
+			return true;
+		}));
+
+		try {
+			assertTrue(predicateEntered.await(5, TimeUnit.SECONDS), "Removal did not reach the predicate");
+			store.clear();
+			continueRemoval.countDown();
+			removal.get(5, TimeUnit.SECONDS);
+
+			assertEquals(0, store.size());
+			assertNull(store.get(0, 0, 0));
+		} finally {
+			continueRemoval.countDown();
+			executor.shutdownNow();
+		}
+	}
+
+	@Test
+	public void testConcurrentDistinctWritesPreserveAllEntries() throws Exception {
+		CopyOnWriteArrayLocalBlockStore store = CopyOnWriteArrayLocalBlockStore.of();
+		assertTrue(store.put(0, 0, 0, BlockState.stone()));
+
+		int writerCount = 8;
+		int writesPerWriter = 64;
+		CountDownLatch start = new CountDownLatch(1);
+		ExecutorService executor = Executors.newFixedThreadPool(writerCount);
+		Future<?>[] writes = new Future<?>[writerCount];
+		try {
+			for (int writer = 0; writer < writerCount; writer++) {
+				int x = writer;
+				writes[writer] = executor.submit(() -> {
+					try {
+						if (!start.await(5, TimeUnit.SECONDS)) {
+							throw new AssertionError("Timed out waiting to start writes");
+						}
+					} catch (InterruptedException exception) {
+						Thread.currentThread().interrupt();
+						throw new AssertionError(exception);
+					}
+					for (int y = 1; y <= writesPerWriter; y++) {
+						assertTrue(store.put(x, y, 0, BlockState.stone()));
+					}
+				});
+			}
+
+			start.countDown();
+			for (Future<?> write : writes) {
+				write.get(10, TimeUnit.SECONDS);
+			}
+
+			assertEquals(1 + writerCount * writesPerWriter, store.size());
+			for (int x = 0; x < writerCount; x++) {
+				for (int y = 1; y <= writesPerWriter; y++) {
+					assertEquals(BlockState.stone(), store.get(x, y, 0));
+				}
+			}
+		} finally {
+			start.countDown();
+			executor.shutdownNow();
 		}
 	}
 

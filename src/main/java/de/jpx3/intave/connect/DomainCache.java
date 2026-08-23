@@ -13,6 +13,8 @@ import java.util.stream.Stream;
 
 public final class DomainCache {
   private static final long CACHE_LIFETIME = 1000L * 60L * 60L * 24L; // 1 day
+  private static final String STANDARD_BASE_DOMAIN = "intave.de";
+  private static final String STANDARD_SERVICE_DOMAIN = "service.intave.de";
 
   private long lastUpdate;
   private final Map<String, Long> baseLatencyMap = new HashMap<>();
@@ -26,7 +28,9 @@ public final class DomainCache {
   private DomainCache() {}
 
   public boolean valid() {
-    return System.currentTimeMillis() - lastUpdate < CACHE_LIFETIME;
+    return !baseLatencyMap.isEmpty()
+      && !serviceLatencyMap.isEmpty()
+      && System.currentTimeMillis() - lastUpdate < CACHE_LIFETIME;
   }
 
   public String baseDomain() {
@@ -34,18 +38,21 @@ public final class DomainCache {
   }
 
   public List<String> baseDomains() {
+    if (sortedBaseDomains.isEmpty()) {
+      return Collections.singletonList(baseDomain());
+    }
     return sortedBaseDomains;
   }
 
   public String serviceDomain() {
     if (IntaveControl.AUTHENTICATION_DEBUG_MODE) {
-      return "service.intave.de";
+      return STANDARD_SERVICE_DOMAIN;
     }
     return selectedServiceDomain;
   }
 
   public List<String> serviceDomains() {
-    if (IntaveControl.AUTHENTICATION_DEBUG_MODE) {
+    if (IntaveControl.AUTHENTICATION_DEBUG_MODE || sortedServiceDomains.isEmpty()) {
       return Collections.singletonList(serviceDomain());
     }
     return sortedServiceDomains;
@@ -80,8 +87,8 @@ public final class DomainCache {
   private void selectPrimaryDomains() {
     sortedBaseDomains = baseLatencyMap.entrySet().stream().sorted(Map.Entry.comparingByValue()).map(Map.Entry::getKey).collect(Collectors.toList());
     sortedServiceDomains = serviceLatencyMap.entrySet().stream().sorted(Map.Entry.comparingByValue()).map(Map.Entry::getKey).collect(Collectors.toList());
-    selectedBaseDomain = sortedBaseDomains.isEmpty() ? "intave.de" : sortedBaseDomains.get(0);
-    selectedServiceDomain = sortedServiceDomains.isEmpty() ? "service.intave.de" : sortedServiceDomains.get(0);
+    selectedBaseDomain = sortedBaseDomains.isEmpty() ? STANDARD_BASE_DOMAIN : sortedBaseDomains.get(0);
+    selectedServiceDomain = sortedServiceDomains.isEmpty() ? STANDARD_SERVICE_DOMAIN : sortedServiceDomains.get(0);
   }
 
   public static Collector<String, ?, DomainCache> lineCollector() {

@@ -92,7 +92,15 @@ public final class PhysicsTestRecorder extends Module {
 			if (rotation == null && !manualRecording.firstRotationHasBeenSent()) {
 				rotation = movement.rotation();
 			}
-			manualRecording.insertFrame(boundingBox, input, position, rotation, user.blockCache(), user.meta().abilities().attributeSnapshot(), movement.gliding, movement.pose(), frameState);
+			manualRecording.insertFrame(
+				boundingBox, input,
+				position, rotation,
+				user.blockCache(),
+				user.meta().abilities().attributeSnapshot(),
+				movement.gliding,
+				movement.pose(),
+				frameState
+			);
 			ActionBar.sendActionBar(user.player(), manualRecording.frameCount() + " frames, " + manualRecording.actions().size() + " actions, " + manualRecording.collisionShapes().size() + " block-types");
 		}
 

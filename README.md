@@ -3,11 +3,11 @@
 
 
 Intave is an enterprise anticheat plugin for Minecraft servers in development since 2016.
-After almost a decade of use on the world's largest Minecraft servers
-and shutting down in mid-2025, we now decided to give back to the community by making Intave source-available to everyone.
+After almost a decade of use on the world's largest Minecraft servers, we decided to make
+Intave source-available to everyone.
 
 ## Downloads
-- [Auto Loader](https://github.com/intave/loader/releases/download/v1.0.0/IntaveLoader.jar) (Recommended)
+- [Auto Loader](https://github.com/intave/loader/releases/download/1.0.1/IntaveLoader.jar) (Recommended)
 - [Nightly Build](https://github.com/intave/intave/releases/download/nightly/Intave.jar)
 - [Modrinth](https://modrinth.com/plugin/intave)
 
