@@ -101,6 +101,13 @@ final class MovementRecordingPhysicsTests {
 	}
 
 	@Test
+	void elytraFireworksWaterRecording() throws IOException {
+		processRecordingResource(
+			"physics_test_runs/pose/elytra/elytra_fireworks_water.ptr"
+		);
+	}
+
+	@Test
 	void recordedGlidingStateSelectsElytra() {
 		MovementRecording recording = MovementRecording.create(
 			VER_1_21_2,
@@ -165,7 +172,7 @@ final class MovementRecordingPhysicsTests {
 		PlaybackBlockCacheView blockCache = new PlaybackBlockCacheView(recording);
 
 		MovementFrameState.ItemState elytra = new MovementFrameState.ItemState(
-			org.bukkit.Material.ELYTRA, 1, 0, Map.of()
+			org.bukkit.Material.ELYTRA, 1, 17, Map.of()
 		);
 		MovementFrameState state = new MovementFrameState(
 			new MovementFrameState.AbilityState(true, true, false, 0.08F, "CREATIVE"),

@@ -206,6 +206,23 @@ final class MovementRecordingSerializerTest {
 	}
 
 	@Test
+	void serializesBlockVariantEnumConstantsWithClassBodies() {
+		MovementRecording recording = MovementRecording.create();
+		BlockVariant variant = testVariant(7, Map.of("axis", TestAxis.X));
+		recording.recordBlockVariant(Material.STONE, 7, variant);
+
+		ByteBuf buffer = Unpooled.buffer();
+		try {
+			MovementRecording.STREAM_CODEC.encode(buffer, recording);
+			MovementRecording decoded = MovementRecording.STREAM_CODEC.decode(buffer);
+
+			assertEquals(TestAxis.X, decoded.blockVariant(Material.STONE, 7).enumProperty(TestAxis.class, "axis"));
+		} finally {
+			buffer.release();
+		}
+	}
+
+	@Test
 	public void deserializeOlderSmartRecordingWithoutCollisionShapes() {
 		MovementRecording recording = recordingWithoutCollisionShapes();
 		ByteBuf buf = Unpooled.buffer();
@@ -371,5 +388,14 @@ final class MovementRecordingSerializerTest {
 			public void dumpStates() {
 			}
 		};
+	}
+
+	private enum TestAxis {
+		X {
+			@Override
+			public String toString() {
+				return "x";
+			}
+		}
 	}
 }

@@ -31,7 +31,7 @@ import org.jetbrains.annotations.NotNull;
 
 import java.util.List;
 
-public final class ImmutableSimulationEnvironmentView implements SimulationEnvironment {
+final class ImmutableSimulationEnvironmentView implements SimulationEnvironment {
 	private final SimulationEnvironment delegate;
 
 	public ImmutableSimulationEnvironmentView(

@@ -27,6 +27,7 @@ import de.jpx3.intave.user.meta.EffectMetadata;
 import de.jpx3.intave.user.meta.InventoryMetadata;
 import de.jpx3.intave.user.meta.MovementMetadata;
 import io.netty.buffer.ByteBuf;
+import org.bukkit.Bukkit;
 import org.bukkit.GameMode;
 import org.bukkit.Material;
 import org.bukkit.enchantments.Enchantment;
@@ -667,7 +668,13 @@ public final class MovementFrameState {
 		}
 
 		ItemStack toItemStack() {
-			ItemStack item = new ItemStack(material, Math.max(1, amount), (short) durability);
+			ItemStack item = new ItemStack(material, Math.max(1, amount));
+			if (Bukkit.getServer() == null) {
+				return item;
+			}
+			if (durability != 0) {
+				item.setDurability((short) durability);
+			}
 			for (Map.Entry<String, Integer> entry : enchantments.entrySet()) {
 				Enchantment enchantment = enchantmentOf(entry.getKey());
 				if (enchantment != null) {

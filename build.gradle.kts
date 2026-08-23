@@ -47,14 +47,6 @@ description = "Automated cheat detection and prevention"
  * Dependencies
  */
 repositories {
-//  exclusiveContent {
-//    forRepository {
-//      mavenLocal()
-//    }
-//    filter {
-//      includeModule("ac.intave", "cloud-protocol")
-//    }
-//  }
   mavenCentral()
   maven { url = uri("https://hub.spigotmc.org/nexus/content/repositories/snapshots/") }
   maven { url = uri("https://oss.sonatype.org/content/repositories/snapshots") }
@@ -78,10 +70,13 @@ dependencies {
   testImplementation("net.dmulloy2:ProtocolLib:5.4.0")
   testImplementation("io.netty:netty-all:4.2.15.Final")
 
-  implementation("ac.intave:samples:0.0.4")
-  implementation("ac.intave:cloud-protocol:0.0.1") { isTransitive = false }
+  // Loaded by Libraries.setupLibraries() when the plugin starts.
+  compileOnly("ac.intave:samples:0.0.6")
+  compileOnly("ac.intave:cloud-protocol:0.0.4") { isTransitive = false }
+  testImplementation("ac.intave:samples:0.0.6")
+  testImplementation("ac.intave:cloud-protocol:0.0.4") { isTransitive = false }
 
-  // random shit
+  // random shit[
   compileOnly("org.jetbrains:annotations:23.1.0")
   compileOnly("it.unimi.dsi:fastutil:8.5.12")
 
@@ -90,8 +85,11 @@ dependencies {
   // bytebuddy
   compileOnly("net.bytebuddy:byte-buddy:1.18.2")
 
-  implementation("org.bouncycastle:bcpkix-jdk18on:1.85")
-  implementation("com.github.luben:zstd-jni:1.5.7-12")
+  // Loaded by Libraries.setupLibraries() when the plugin starts.
+  compileOnly("org.bouncycastle:bcpkix-jdk18on:1.85")
+  compileOnly("com.github.luben:zstd-jni:1.5.7-12")
+  testImplementation("org.bouncycastle:bcpkix-jdk18on:1.85")
+  testImplementation("com.github.luben:zstd-jni:1.5.7-12")
 
   // floodgate
   compileOnly("org.geysermc.floodgate:api:2.0-SNAPSHOT")
@@ -750,7 +748,6 @@ tasks {
     val classifier = "file"
     archiveFileName.set("$simpleName.jar")
     archiveClassifier.set(classifier)
-    relocate("com.google.gson", "de.jpx3.intave.library.gson")
   }
 
   test {

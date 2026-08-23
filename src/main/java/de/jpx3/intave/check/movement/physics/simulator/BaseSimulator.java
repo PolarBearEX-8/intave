@@ -37,6 +37,7 @@ import de.jpx3.intave.user.meta.ProtocolMetadata;
 import de.jpx3.intave.user.meta.ViolationMetadata;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
+import org.bukkit.util.Vector;
 
 import java.util.Collection;
 import java.util.Collections;
@@ -566,7 +567,29 @@ class BaseSimulator extends Simulator {
       performGlobalEntityPush(user, environment, motion, boundingBox);
     }
 
+    if (clientData.fireworkBoostTicksAfterPlayer()
+      && environment.shouldHaveFallFlyingPose()) {
+      applyAttachedFireworkBoosts(
+        motion,
+        environment.lookVector(),
+        environment.activeFireworkRockets()
+      );
+    }
+
     return motion;
+  }
+
+  private void applyAttachedFireworkBoosts(
+    Motion motion, Vector lookVector, int rocketCount
+  ) {
+    for (int rocket = 0; rocket < rocketCount; rocket++) {
+      motion.motionX += lookVector.getX() * 0.1D
+        + (lookVector.getX() * 1.5D - motion.motionX) * 0.5D;
+      motion.motionY += lookVector.getY() * 0.1D
+        + (lookVector.getY() * 1.5D - motion.motionY) * 0.5D;
+      motion.motionZ += lookVector.getZ() * 0.1D
+        + (lookVector.getZ() * 1.5D - motion.motionZ) * 0.5D;
+    }
   }
 
   private void updateFallStateAfter(

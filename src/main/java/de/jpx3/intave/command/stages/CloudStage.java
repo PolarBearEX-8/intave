@@ -41,11 +41,11 @@ public final class CloudStage extends CommandStage {
     boolean enabled = cloud.isEnabled();
 
     if (!enabled) {
-      commandSender.sendMessage(IntavePlugin.cloudPrefix() + ChatColor.RED + "Cloud connection is not enabled");
+      commandSender.sendMessage(IntavePlugin.prefix() + ChatColor.RED + "Cloud connection is not enabled");
       return;
     }
 
-    commandSender.sendMessage(IntavePlugin.cloudPrefix() + "Connection status");
+    commandSender.sendMessage(IntavePlugin.prefix() + "Connection status");
 
     // connected to at least one
     boolean connectedToAtLeastOne = cloud.isConnected();
@@ -62,13 +62,13 @@ public final class CloudStage extends CommandStage {
     boolean enabled = cloud.isEnabled();
 
     if (!enabled) {
-      commandSender.sendMessage(IntavePlugin.cloudPrefix() + ChatColor.RED + "Cloud connection is not enabled");
+      commandSender.sendMessage(IntavePlugin.prefix() + ChatColor.RED + "Cloud connection is not enabled");
       return;
     }
 
     Nayoro nayoro = Modules.nayoro();
     for (Player onlinePlayer : Bukkit.getOnlinePlayers()) {
-      String mainBase = IntavePlugin.cloudPrefix() + "Player " + ChatColor.RED + onlinePlayer.getName() + ChatColor.GRAY;
+      String mainBase = IntavePlugin.prefix() + "Player " + ChatColor.RED + onlinePlayer.getName() + ChatColor.GRAY;
       User user = UserRepository.userOf(onlinePlayer);
       if (nayoro.recordingActiveFor(user)) {
         mainBase += " is " + ChatColor.GREEN + "transmitting";

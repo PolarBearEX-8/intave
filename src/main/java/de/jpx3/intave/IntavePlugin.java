@@ -108,7 +108,6 @@ public final class IntavePlugin extends JavaPlugin {
   private static IntavePlugin singletonInstance;
   private static String version = "UNKNOWN";
   private static String prefix = ChatColor.translateAlternateColorCodes('&', "&8[&c&lIntave&8]&7 ");
-  private static String cloudPrefix = ChatColor.translateAlternateColorCodes('&', "&8[&c&lIntave&7/&3Cloud&8]&7 ");
   private static String defaultColor = ChatColor.getLastColors(prefix);
   private static final UUID gameId = UUID.randomUUID();
   private static boolean offlineMode = false, successfullyBooted = false;
@@ -317,7 +316,7 @@ public final class IntavePlugin extends JavaPlugin {
       FaultKicks.applyFrom(configuration.getConfigurationSection("fault-kicks"));
       ConsoleOutput.applyFrom(configuration.getConfigurationSection("logging"));
       try {
-        cloud.configInit(configuration.getConfigurationSection("cloud"));
+        cloud.configInit(configuration.getConfigurationSection("check.cloud"));
       } catch (Exception exception) {
         logger.error("Something went wrong loading the cloud configuration");
         exception.printStackTrace();
@@ -749,10 +748,6 @@ public final class IntavePlugin extends JavaPlugin {
 
   public static String prefix() {
     return prefix;
-  }
-
-  public static String cloudPrefix() {
-    return cloudPrefix;
   }
 
   public static String defaultColor() {

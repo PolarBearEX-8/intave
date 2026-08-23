@@ -38,7 +38,7 @@ import static de.jpx3.intave.check.movement.physics.environment.MovementCharacte
 import static de.jpx3.intave.share.ClientMath.cos;
 import static de.jpx3.intave.share.ClientMath.sin;
 
-public final class MutableSimulationEnvironmentView implements SimulationEnvironment {
+final class MutableSimulationEnvironmentView implements SimulationEnvironment {
   private final SimulationEnvironment delegate;
   private List<EnvironmentMutation> deferredMutations;
 

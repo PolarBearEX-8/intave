@@ -22,6 +22,7 @@ import ac.intave.cloud.protocol.packets.player.ServerboundPlayerLogout;
 import ac.intave.cloud.protocol.pipeline.*;
 import de.jpx3.intave.IntaveLogger;
 import de.jpx3.intave.IntavePlugin;
+import de.jpx3.intave.adapter.MinecraftVersion;
 import de.jpx3.intave.cloud.protocol.Attestation;
 import de.jpx3.intave.cloud.protocol.Attestations;
 import de.jpx3.intave.cloud.protocol.CloudToken;
@@ -113,27 +114,26 @@ public final class Session {
 			if (!connectFuture.await(10, SECONDS)) {
 				connectFuture.cancel(false);
 				connectFuture.channel().close();
-				IntaveLogger.logger().error("[Cloud] Timed out connecting to " + endpoint() + " after 10 seconds");
+				IntaveLogger.logger().error("Timed out connecting to cloud after 10 seconds");
 				group.shutdownGracefully();
 				lazyReturn.accept(false);
 				return;
 			}
 			if (!connectFuture.isSuccess()) {
-				IntaveLogger.logger().error("[Cloud] Unable to connect to " + endpoint() + ": " + describeFailure(connectFuture.cause()));
+				IntaveLogger.logger().error("Unable to connect to cloud: " + describeFailure(connectFuture.cause()));
 				connectFuture.channel().close();
 				group.shutdownGracefully();
 				lazyReturn.accept(false);
 				return;
 			}
-
-			IntaveLogger.logger().info("[Cloud] TCP connection established with " + endpoint() + "; starting handshake");
+//			IntaveLogger.logger().info("Connection established with cloud; starting handshake");
 			lazyReturn.accept(true);
 			channel.closeFuture().addListener(closeFuture -> {
 				started = false;
 				if (closeFuture.cause() == null) {
-					IntaveLogger.logger().info("[Cloud] Connection to " + endpoint() + " closed");
+					IntaveLogger.logger().info("Connection to cloud closed");
 				} else {
-					IntaveLogger.logger().error("[Cloud] Connection to " + endpoint() + " closed unexpectedly: " + describeFailure(closeFuture.cause()));
+					IntaveLogger.logger().error("Connection to cloud closed unexpectedly: " + describeFailure(closeFuture.cause()));
 				}
 				notifyShutdownSubscribers();
 				group.shutdownGracefully();
@@ -141,11 +141,11 @@ public final class Session {
 			});
 		} catch (InterruptedException exception) {
 			Thread.currentThread().interrupt();
-			IntaveLogger.logger().error("[Cloud] Interrupted while connecting to " + endpoint() + ": " + describeFailure(exception));
+			IntaveLogger.logger().error("Interrupted while connecting to cloud: " + describeFailure(exception));
 			group.shutdownGracefully();
 			lazyReturn.accept(false);
 		} catch (Exception exception) {
-			IntaveLogger.logger().error("[Cloud] Failed to initialize connection to " + endpoint() + ": " + describeFailure(exception));
+			IntaveLogger.logger().error("Failed to initialize connection to cloud: " + describeFailure(exception));
 			exception.printStackTrace();
 			group.shutdownGracefully();
 			lazyReturn.accept(false);
@@ -234,7 +234,10 @@ public final class Session {
 	}
 
 	public void sendPacket(Packet<Serverbound> packet) {
-		System.out.println("[Cloud] Sending serverbound packet '" + packet.name() + "' to " + endpoint());
+		if (!packetSupported(packet)) {
+			return;
+		}
+		System.out.println("Sending serverbound packet '" + packet.name() + "' to cloud");
 		if (packet instanceof AttestedPacket) {
 			AttestedPacket<?> attestedPacket = (AttestedPacket<?>) packet;
 			if (attestedPacket.hasIdempotencyToken()) {
@@ -344,7 +347,7 @@ public final class Session {
 		flushPendingPackets();
 		startupSubscribers.forEach(subscriber -> subscriber.accept(null));
 		startupSubscribers.clear();
-		IntaveLogger.logger().info("[Cloud] Handshake with " + endpoint() + " completed");
+		IntaveLogger.logger().info("Handshake with cloud completed");
 	}
 
 	public boolean started() {
@@ -479,7 +482,7 @@ public final class Session {
 
 	public void clarifyUnknownPlayerId(User user, long id) {
 		BackgroundExecutors.execute(() -> {
-			sendPacket(new ServerboundPlayerLogin(identityOf(user), id));
+			sendPacket(playerLogin(user, id));
 		});
 	}
 
@@ -493,7 +496,7 @@ public final class Session {
 	private void requestPlayerId(User user, UUID userId) {
 		if (requestedPlayerIds.add(userId)) {
 			try {
-				sendPacket(new ServerboundPlayerLogin(identityOf(user)));
+				sendPacket(playerLogin(user, -1L));
 			} catch (RuntimeException exception) {
 				requestedPlayerIds.remove(userId);
 				throw exception;
@@ -502,16 +505,24 @@ public final class Session {
 	}
 
 	private void writeToChannel(Packet<Serverbound> packet) {
+		if (!packetSupported(packet)) {
+			return;
+		}
 		Channel currentChannel = channel;
 		currentChannel.writeAndFlush(packet).addListener(future -> {
 			if (!future.isSuccess()) {
 				Throwable cause = future.cause();
-				IntaveLogger.logger().error("[Cloud] Failed to send serverbound packet '" + packet.name() + "' (version " + packet.version() + ") to " + endpoint() + "; channel active=" + currentChannel.isActive() + ", writable=" + currentChannel.isWritable() + ": " + describeFailure(cause));
+				IntaveLogger.logger().error("Failed to send serverbound packet '" + packet.name() + "' (version " + packet.version() + ") to cloud; channel active=" + currentChannel.isActive() + ", writable=" + currentChannel.isWritable() + ": " + describeFailure(cause));
 				if (cause != null) {
 					cause.printStackTrace();
 				}
 			}
 		});
+	}
+
+	private boolean packetSupported(Packet<Serverbound> packet) {
+		return !protocol.packetIdsKnownFor(SERVERBOUND)
+			|| protocol.packetAvailable(SERVERBOUND, packet.name());
 	}
 
 	private static Identity identityOf(User user) {
@@ -524,6 +535,20 @@ public final class Session {
 			address = player.getAddress().getAddress();
 		}
 		return new Identity(player.getUniqueId(), player.getName(), address);
+	}
+
+	private static ServerboundPlayerLogin playerLogin(User user, long requestedId) {
+		return new ServerboundPlayerLogin(
+			identityOf(user),
+			requestedId,
+			user.protocolVersion(),
+			serverVersion()
+		);
+	}
+
+	private static String serverVersion() {
+		MinecraftVersion version = MinecraftVersion.current();
+		return version.getMajor() + "." + version.getMinor() + "." + version.getBuild();
 	}
 
 	private void notifyShutdownSubscribers() {

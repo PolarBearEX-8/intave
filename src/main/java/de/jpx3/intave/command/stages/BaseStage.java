@@ -466,6 +466,7 @@ public final class BaseStage extends CommandStage {
     }
     printHistory(sender, "Reach", violations.fromCheck("attackraytrace"));
     printHistory(sender, "KillAura", violations.fromCheck("heuristics"));
+    printHistory(sender, "Cloud analysis", violations.fromCheck("cloud"));
     printHistory(sender, "Fly/Speed", violations.fromCheck("physics"));
     printHistory(sender, "Timer", violations.fromCheck("timer"));
     printHistory(sender, "AutoClicker", violations.fromCheck("clickpatterns"));

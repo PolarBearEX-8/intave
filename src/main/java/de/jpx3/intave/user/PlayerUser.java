@@ -65,7 +65,6 @@ import de.jpx3.intave.user.storage.Storages;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.OfflinePlayer;
-import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.entity.Player;
 
 import java.lang.ref.Reference;
@@ -188,8 +187,7 @@ final class PlayerUser implements User {
     if (disabledCache != null) {
       return disabledCache;
     }
-    ConfigurationSection featuresSection = IntavePlugin.singletonInstance().settings().getConfigurationSection("cloud.features");
-    return disabledCache = featuresSection != null && !featuresSection.getBoolean("logs", featuresSection.getBoolean("cloud-logs", true));
+    return disabledCache = !IntavePlugin.singletonInstance().cloud().config().features().isCloudLogs();
   }
 
   @Override

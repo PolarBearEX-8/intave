@@ -17,7 +17,6 @@ import de.jpx3.intave.diagnostic.timings.Timings;
 import de.jpx3.intave.player.collider.Colliders;
 import de.jpx3.intave.player.collider.complex.SimulationResult;
 import de.jpx3.intave.share.Motion;
-import de.jpx3.intave.share.Position;
 import de.jpx3.intave.user.User;
 import org.bukkit.util.Vector;
 
@@ -84,28 +83,6 @@ final class ElytraSimulator extends BaseSimulator {
     Timings.CHECK_PHYSICS_SIMULATOR_ELYTRA.stop();
     Timings.CHECK_PHYSICS_SIMULATOR.stop();
     return Simulation.of(user, configuration, environment, collisionResult);
-  }
-
-  @Override
-  public Motion simulateAfterTick(User user, SimulationEnvironment environment, MovementConfiguration configuration, Position position, Motion motion) {
-    Motion afterTickMotion = super.simulateAfterTick(user, environment, configuration, position, motion);
-    if (user.meta().protocol().fireworkBoostTicksAfterPlayer()
-      && environment.shouldHaveFallFlyingPose()) {
-      applyAttachedFireworkBoosts(
-        afterTickMotion,
-        environment.lookVector(),
-        environment.activeFireworkRockets()
-      );
-    }
-    return afterTickMotion;
-  }
-
-  void applyAttachedFireworkBoosts(Motion motion, Vector lookVector, int rocketCount) {
-    for (int rocket = 0; rocket < rocketCount; rocket++) {
-      motion.motionX += lookVector.getX() * 0.1D + (lookVector.getX() * 1.5D - motion.motionX) * 0.5D;
-      motion.motionY += lookVector.getY() * 0.1D + (lookVector.getY() * 1.5D - motion.motionY) * 0.5D;
-      motion.motionZ += lookVector.getZ() * 0.1D + (lookVector.getZ() * 1.5D - motion.motionZ) * 0.5D;
-    }
   }
 
   @Override

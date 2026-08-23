@@ -18,6 +18,14 @@ public final class Libraries {
 
     loadLibrary(fromMavenGradle("net.bytebuddy", "byte-buddy", "1.18.2"));
 
+    // cloud
+    loadLibrary(fromMavenGradle("org.bouncycastle", "bcprov-jdk18on", "1.85"));
+    loadLibrary(fromMavenGradle("org.bouncycastle", "bcutil-jdk18on", "1.85"));
+    loadLibrary(fromMavenGradle("org.bouncycastle", "bcpkix-jdk18on", "1.85"));
+    loadLibrary(fromMavenGradle("com.github.luben", "zstd-jni", "1.5.7-12"));
+    loadLibrary(fromMavenGradle("ac.intave", "samples", "0.0.6"));
+    loadLibrary(fromMavenGradle("ac.intave", "cloud-protocol", "0.0.4"));
+
     // apiguardian
     loadLibrary(fromMavenGradle("org.apiguardian", "apiguardian-api", "1.1.2"));
 
