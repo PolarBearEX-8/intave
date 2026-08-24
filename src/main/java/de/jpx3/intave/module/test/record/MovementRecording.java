@@ -16,7 +16,6 @@ import de.jpx3.intave.adapter.MinecraftVersions;
 import de.jpx3.intave.annotate.Nullable;
 import de.jpx3.intave.block.cache.BlockCache;
 import de.jpx3.intave.block.cache.MockFullBlockStaticPlane;
-import de.jpx3.intave.block.collision.Collision;
 import de.jpx3.intave.block.fluid.Fluid;
 import de.jpx3.intave.block.fluid.Fluids;
 import de.jpx3.intave.block.shape.BlockShape;
@@ -33,16 +32,20 @@ import de.jpx3.intave.share.*;
 import de.jpx3.intave.user.User;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
+import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
+import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import org.bukkit.Material;
 
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.util.*;
 import java.util.concurrent.ThreadLocalRandom;
-import java.util.stream.Collectors;
 import java.util.zip.InflaterInputStream;
 
+import static de.jpx3.intave.share.ClientMath.floor;
+
 public final class MovementRecording {
+	private static final MaterialVariantStore AIR = MaterialVariantStore.air();
 	private static final StreamCodec<ByteBuf, ByteBuf, Map<Material, Map<Integer, BlockShape>>> COLLISION_SHAPES_CODEC = ByteBufStreamCodecs.mapCodec(ByteBufStreamCodecs.MATERIAL, ByteBufStreamCodecs.mapCodec(ByteBufStreamCodecs.INTEGER, BlockShape.STREAM_CODEC));
 
 	private static final StreamCodec<ByteBuf, ByteBuf, Map<Material, Map<Integer, Fluid>>> FLUIDS_CODEC = ByteBufStreamCodecs.mapCodec(ByteBufStreamCodecs.MATERIAL, ByteBufStreamCodecs.mapCodec(ByteBufStreamCodecs.INTEGER, Fluid.STREAM_CODEC));
@@ -58,11 +61,12 @@ public final class MovementRecording {
 	private final List<Action> actions = new LinkedList<>();
 	private final List<MoveFrame> frames = new LinkedList<>();
 	private final List<Map<String, Attribute>> frameAttributes = new LinkedList<>();
-	private final Map<BlockPosition, MaterialVariantStore> blocks = new HashMap<>();
+	private final Long2ObjectMap<MaterialVariantStore> blocks = new Long2ObjectOpenHashMap<>();
 	private final Map<VelocityToken, VelocityInterval> velocities = new LinkedHashMap<>();
 	private final Map<Material, Map<Integer, BlockShape>> collisionShapes;
 	private final Map<Material, Map<Integer, Fluid>> fluids;
 	private final Map<Material, Map<Integer, BlockVariant>> blockVariants;
+	private final Set<MaterialVariantStore> recordedMetadata = Collections.newSetFromMap(new IdentityHashMap<>());
 
 	MovementRecording(UUID internalId, int clientProtocolVersion, MinecraftVersion serverVersion, List<MoveFrame> frames, List<Map<String, Attribute>> frameAttributes, List<Action> actions, Map<Material, Map<Integer, BlockShape>> collisionShapes, Map<Material, Map<Integer, Fluid>> fluids, Map<Material, Map<Integer, BlockVariant>> blockVariants) {
 		this.internalId = Objects.requireNonNull(internalId, "internalId cannot be null");
@@ -85,7 +89,7 @@ public final class MovementRecording {
 	}
 
 	public void insertFrame(BoundingBox boundingBox, Input input, @Nullable Position position, @Nullable Rotation rotation, BlockCache blockCache, Map<String, Attribute> attributes, boolean gliding, @Nullable Pose physicalPose) {
-		Map<BlockPosition, MaterialVariantStore> dirtyBlocks = insertAndDelta(nearbyBlocks(blockCache, boundingBox, position));
+		Map<BlockPosition, MaterialVariantStore> dirtyBlocks = nearbyBlockDelta(blockCache, boundingBox, position);
 		appendFrame(new MoveFrame(position, rotation, dirtyBlocks, input, gliding, physicalPose));
 		frameAttributes.add(new HashMap<>(attributes));
 	}
@@ -101,9 +105,7 @@ public final class MovementRecording {
 		@Nullable Pose physicalPose,
 		MovementFrameState frameState
 	) {
-		Map<BlockPosition, MaterialVariantStore> dirtyBlocks = insertAndDelta(
-			nearbyBlocks(blockCache, boundingBox, position)
-		);
+		Map<BlockPosition, MaterialVariantStore> dirtyBlocks = nearbyBlockDelta(blockCache, boundingBox, position);
 		appendFrame(new MoveFrame(
 			position, rotation, dirtyBlocks, input, gliding, physicalPose,
 			Objects.requireNonNull(frameState, "frameState")
@@ -208,60 +210,89 @@ public final class MovementRecording {
 		collisionShapes.clear();
 		fluids.clear();
 		blockVariants.clear();
+		recordedMetadata.clear();
 	}
 
 	void seedBlocks(Map<BlockPosition, MaterialVariantStore> blockState) {
 		blocks.clear();
-		blocks.putAll(blockState);
+		for (Map.Entry<BlockPosition, MaterialVariantStore> entry : blockState.entrySet()) {
+			MaterialVariantStore store = entry.getValue();
+			if (store.type() != Material.AIR) {
+				blocks.put(entry.getKey().toLong(), store);
+			}
+		}
 	}
 
-	private Map<BlockPosition, MaterialVariantStore> nearbyBlocks(BlockCache blockCache, BoundingBox boundingBox, @Nullable Position position) {
+	private Map<BlockPosition, MaterialVariantStore> nearbyBlockDelta(BlockCache blockCache, BoundingBox boundingBox, @Nullable Position position) {
 		if (position == null) {
 			return Collections.emptyMap();
 		}
 
-		Map<BlockPosition, MaterialVariantStore> nearbyBlocks = new HashMap<>();
-		List<BlockPosition> nearbyPositions = Collision.collectRasterizedCollisions(
-			boundingBox.grow(6), MutableBlockPosition::toBlockPosition,
-			blockPosition -> false, Collectors.toList()
-		);
-		for (BlockPosition blockPosition : nearbyPositions) {
-			Material type = blockCache.typeAt(blockPosition);
-			int index = blockCache.variantIndexAt(blockPosition);
-			MaterialVariantStore store = MaterialVariantStore.of(type, index);
-			nearbyBlocks.put(blockPosition, store);
-			// check if collision shapes has the block
-			if (!collisionShapes.containsKey(type) || !collisionShapes.get(type).containsKey(index)) {
-				BlockShape shape = blockCache.collisionShapeAt(blockPosition);
-				collisionShapes.computeIfAbsent(type, k -> new HashMap<>()).put(index, shape.normalized(blockPosition));
-			}
-			if (!fluids.containsKey(type) || !fluids.get(type).containsKey(index)) {
-				Fluid fluid = Fluids.fluidStateOf(type, index);
-				fluids.computeIfAbsent(type, k -> new HashMap<>()).put(index, fluid);
-			}
-			if (BlockVariantRegister.isIndexed(type)) {
-				recordBlockVariant(type, index, BlockVariantRegister.variantOf(type, index));
-			}
-		}
-		return nearbyBlocks;
-	}
-
-	private Map<BlockPosition, MaterialVariantStore> insertAndDelta(Map<BlockPosition, MaterialVariantStore> nearbyBlocks) {
 		Map<BlockPosition, MaterialVariantStore> delta = new HashMap<>();
-		for (Map.Entry<BlockPosition, MaterialVariantStore> entry : nearbyBlocks.entrySet()) {
-			BlockPosition pos = entry.getKey();
-			MaterialVariantStore newStore = entry.getValue();
-			MaterialVariantStore oldStore = blocks.put(pos, newStore);
-
-			// we don't set air as initial
-			if ((oldStore == null || oldStore.type() == Material.AIR) && newStore.type() == Material.AIR) {
-				continue;
-			}
-			if (!newStore.equals(oldStore)) {
-				delta.put(pos, newStore);
+		int minX = floor(boundingBox.minX - 6.0D);
+		int minY = floor(boundingBox.minY - 6.0D);
+		int minZ = floor(boundingBox.minZ - 6.0D);
+		int maxX = floor(boundingBox.maxX + 6.0D);
+		int maxY = floor(boundingBox.maxY + 6.0D);
+		int maxZ = floor(boundingBox.maxZ + 6.0D);
+		for (int x = minX; x <= maxX; x++) {
+			for (int y = minY; y <= maxY; y++) {
+				for (int z = minZ; z <= maxZ; z++) {
+					captureBlock(blockCache, delta, x, y, z);
+				}
 			}
 		}
 		return delta;
+	}
+
+	private void captureBlock(BlockCache blockCache, Map<BlockPosition, MaterialVariantStore> delta, int x, int y, int z) {
+		BlockState state = blockCache.peekStateAt(x, y, z);
+		Material type;
+		if (state == null) {
+			type = blockCache.typeAt(x, y, z);
+			state = blockCache.peekStateAt(x, y, z);
+		} else {
+			type = state.type();
+		}
+		int index = state == null ? blockCache.variantIndexAt(x, y, z) : state.variantIndex();
+		MaterialVariantStore newStore = type == Material.AIR ? AIR : MaterialVariantStore.of(type, index);
+		long blockKey = MutableBlockPosition.asLong(x, y, z);
+		MaterialVariantStore oldStore = type == Material.AIR
+			? blocks.remove(blockKey)
+			: blocks.put(blockKey, newStore);
+		if (newStore != oldStore && (oldStore != null || type != Material.AIR)) {
+			delta.put(new BlockPosition(x, y, z), newStore);
+		}
+		if (recordedMetadata.contains(newStore)) {
+			return;
+		}
+
+		Map<Integer, BlockShape> shapes = collisionShapes.get(type);
+		if (shapes == null) {
+			shapes = new HashMap<>();
+			collisionShapes.put(type, shapes);
+		}
+		if (!shapes.containsKey(index)) {
+			BlockShape shape = state == null
+				? blockCache.collisionShapeAt(x, y, z)
+				: state.collisionShape();
+			shapes.put(index, shape.normalized(x, y, z));
+		}
+
+		Map<Integer, Fluid> typeFluids = fluids.get(type);
+		if (typeFluids == null) {
+			typeFluids = new HashMap<>();
+			fluids.put(type, typeFluids);
+		}
+		if (!typeFluids.containsKey(index)) {
+			typeFluids.put(index, Fluids.fluidStateOf(type, index));
+		}
+
+		if (BlockVariantRegister.isIndexed(type)) {
+			Map<Integer, BlockVariant> variants = blockVariants.computeIfAbsent(type, key -> new HashMap<>());
+			variants.computeIfAbsent(index, key -> BlockVariantRegister.variantOf(type, key).copy());
+		}
+		recordedMetadata.add(newStore);
 	}
 
 	public UUID internalId() {

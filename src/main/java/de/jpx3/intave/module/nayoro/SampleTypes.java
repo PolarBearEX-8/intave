@@ -11,25 +11,25 @@
 
 package de.jpx3.intave.module.nayoro;
 
-import ac.intave.samples.share.*;
+import ac.intave.samples.share.Block;
+import ac.intave.samples.share.Hand;
+import ac.intave.samples.share.Item;
+import ac.intave.samples.share.ItemCategory;
 import com.comphenix.protocol.wrappers.EnumWrappers;
-import de.jpx3.intave.block.cache.BlockCache;
 import de.jpx3.intave.entity.size.HitboxSize;
 import de.jpx3.intave.share.BlockState;
 import de.jpx3.intave.share.BoundingBox;
 import de.jpx3.intave.share.Direction;
 import de.jpx3.intave.share.RawVector3d;
-import org.bukkit.Material;
 import org.bukkit.inventory.ItemStack;
 
-import java.util.*;
-
-import static de.jpx3.intave.share.ClientMath.floor;
+import java.util.ArrayList;
+import java.util.Map;
+import java.util.SortedMap;
+import java.util.TreeMap;
 
 /** Converts Intave runtime values at the boundary of the samples API. */
 public final class SampleTypes {
-  private static final double NEARBY_BLOCK_RADIUS = 3.0D;
-
   private SampleTypes() {
   }
 
@@ -108,43 +108,6 @@ public final class SampleTypes {
       items[index] = item(itemStacks[index]);
     }
     return items;
-  }
-
-  public static List<BlockUpdate> dirtyNearbyBlocks(
-    BlockCache blockCache,
-    BoundingBox playerBoundingBox,
-    Map<de.jpx3.intave.share.BlockPosition, Block> recordedBlocks
-  ) {
-    BoundingBox region = playerBoundingBox.grow(NEARBY_BLOCK_RADIUS);
-    int minX = floor(region.minX);
-    int minY = floor(region.minY);
-    int minZ = floor(region.minZ);
-    int maxX = floor(region.maxX);
-    int maxY = floor(region.maxY);
-    int maxZ = floor(region.maxZ);
-    List<BlockUpdate> updates = new ArrayList<>();
-    for (int x = minX; x <= maxX; x++) {
-      for (int y = minY; y <= maxY; y++) {
-        for (int z = minZ; z <= maxZ; z++) {
-          BlockState state = blockCache.stateAt(x, y, z);
-          Block current = state.type() == Material.AIR
-            ? Block.AIR
-            : block(state, x, y, z);
-          de.jpx3.intave.share.BlockPosition position =
-            de.jpx3.intave.share.BlockPosition.of(x, y, z);
-          Block previous = recordedBlocks.put(position, current);
-          if ((previous == null || previous == Block.AIR) && current == Block.AIR) {
-            continue;
-          }
-          if (!current.equals(previous)) {
-            updates.add(new BlockUpdate(
-              new ac.intave.samples.share.BlockPosition(x, y, z), current
-            ));
-          }
-        }
-      }
-    }
-    return updates;
   }
 
   public static Block block(BlockState state, int blockX, int blockY, int blockZ) {

@@ -16,6 +16,7 @@ import de.jpx3.intave.annotate.Nullable;
 import de.jpx3.intave.cloud.protocol.CloudToken;
 import de.jpx3.intave.share.Result;
 import org.bukkit.configuration.ConfigurationSection;
+import org.bukkit.configuration.file.YamlConfiguration;
 
 public final class CloudConfig {
   private boolean enabled;
@@ -31,38 +32,99 @@ public final class CloudConfig {
     return this.features;
   }
 
+  public static CloudConfig from(YamlConfiguration configuration) {
+    ConfigurationSection current = configuration.getConfigurationSection("check.cloud");
+    ConfigurationSection legacy = configuration.getConfigurationSection("cloud");
+    return from(current, legacy);
+  }
+
   public static CloudConfig from(ConfigurationSection section) {
-    // enabled by default
-    boolean enabled = section == null || section.getBoolean("enabled", true);
-    ConfigurationSection featuresSection = section == null ? null : section.getConfigurationSection("features");
-    boolean cloudStorage = featuresSection == null || featuresSection.getBoolean("storage", featuresSection.getBoolean("cloud-storage", true));
-    boolean cloudTrustFactor = featuresSection == null || featuresSection.getBoolean("trustfactor", featuresSection.getBoolean("cloud-trustfactor", true));
-    boolean cloudSamples = featuresSection == null || featuresSection.getBoolean("samples",  featuresSection.getBoolean("cloud-heuristics", true));
-    boolean cloudLogs = true;//featuresSection == null || featuresSection.getBoolean("logs", featuresSection.getBoolean("cloud-logs", true));
-    PrivacyMode privacyMode = PrivacyMode.fromString(section == null ? "BEST_DETECTION" : section.getString("privacy-mode", "BEST_DETECTION"));
-    String cloudToken = section == null ? null : section.getString("token");
+    return from(section, null);
+  }
+
+  private static CloudConfig from(
+    ConfigurationSection section,
+    ConfigurationSection legacySection
+  ) {
+    boolean requestedEnabled = booleanValue(section, legacySection, false, "enabled");
+    boolean cloudStorage = booleanValue(
+      section, legacySection, true, "features.storage", "features.cloud-storage"
+    );
+    boolean cloudTrustFactor = booleanValue(
+      section, legacySection, true, "features.trustfactor", "features.cloud-trustfactor"
+    );
+    boolean cloudSamples = booleanValue(
+      section, legacySection, true, "features.samples", "features.cloud-heuristics"
+    );
+    PrivacyMode privacyMode = PrivacyMode.fromString(
+      stringValue(section, legacySection, "BEST_DETECTION", "privacy-mode")
+    );
+    String cloudToken = stringValue(section, legacySection, null, "token");
     CloudToken connectionSettings = null;
-    if (cloudToken != null) {
+    if (requestedEnabled && usableToken(cloudToken)) {
       Result<CloudToken, String> connectionStringResult = CloudToken.fromString(cloudToken);
       if (connectionStringResult.erroneous()) {
         IntaveLogger.logger().error("Unable to read cloud token: " + connectionStringResult.error());
       } else {
         connectionSettings = connectionStringResult.result();
       }
-    } else {
-      IntaveLogger.logger().info("No cloud token provided, cloud will not be enabled");
     }
     CloudFeatures features = new CloudFeatures();
     features.cloudStorage = cloudStorage;
     features.cloudTrustFactor = cloudTrustFactor;
     features.cloudSamples = cloudSamples;
-    features.cloudLogs = cloudLogs;
     CloudConfig config = new CloudConfig();
-    config.enabled = enabled;
+    config.enabled = requestedEnabled && connectionSettings != null;
     config.connectionSettings = connectionSettings;
     config.features = features;
     config.privacyMode = privacyMode;
     return config;
+  }
+
+  private static boolean booleanValue(
+    ConfigurationSection section,
+    ConfigurationSection legacySection,
+    boolean def,
+    String... paths
+  ) {
+    for (String path : paths) {
+      if (section != null && section.contains(path)) {
+        return section.getBoolean(path);
+      }
+    }
+    for (String path : paths) {
+      if (legacySection != null && legacySection.contains(path)) {
+        return legacySection.getBoolean(path);
+      }
+    }
+    return def;
+  }
+
+  private static String stringValue(
+    ConfigurationSection section,
+    ConfigurationSection legacySection,
+    String def,
+    String... paths
+  ) {
+    for (String path : paths) {
+      if (section != null && section.contains(path)) {
+        return section.getString(path);
+      }
+    }
+    for (String path : paths) {
+      if (legacySection != null && legacySection.contains(path)) {
+        return legacySection.getString(path);
+      }
+    }
+    return def;
+  }
+
+  private static boolean usableToken(String cloudToken) {
+    if (cloudToken == null) {
+      return false;
+    }
+    String trimmedToken = cloudToken.trim();
+    return !trimmedToken.isEmpty() && !"ct_EXAMPLE-TOKEN".equals(trimmedToken);
   }
 
   public @Nullable CloudToken connectionSettings() {
@@ -81,7 +143,6 @@ public final class CloudConfig {
     private boolean cloudStorage;
     private boolean cloudTrustFactor;
     private boolean cloudSamples;
-    private boolean cloudLogs;
 
     public boolean cloudStorageEnabled() {
       return this.cloudStorage;
@@ -95,8 +156,5 @@ public final class CloudConfig {
       return this.cloudSamples;
     }
 
-    public boolean isCloudLogs() {
-      return this.cloudLogs;
-    }
   }
 }

@@ -32,7 +32,7 @@ import de.jpx3.intave.resource.Resources;
 import de.jpx3.intave.user.User;
 import de.jpx3.intave.user.UserRepository;
 import org.bukkit.Bukkit;
-import org.bukkit.configuration.ConfigurationSection;
+import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 
 import java.nio.ByteBuffer;
@@ -63,7 +63,7 @@ public final class Cloud {
 		setupKeepAliveTick();
 	}
 
-	public void configInit(ConfigurationSection config) {
+	public void configInit(YamlConfiguration config) {
 		cloudConfig = CloudConfig.from(config);
 	}
 

@@ -18,7 +18,6 @@ import de.jpx3.intave.access.player.trust.DefaultForwardingPermissionTrustFactor
 import de.jpx3.intave.access.player.trust.TrustFactor;
 import de.jpx3.intave.access.player.trust.TrustFactorResolver;
 import de.jpx3.intave.annotate.HighOrderService;
-import de.jpx3.intave.cloud.LogTransmittor;
 import de.jpx3.intave.diagnostic.ConsoleOutput;
 import de.jpx3.intave.diagnostic.message.DebugBroadcast;
 import de.jpx3.intave.diagnostic.message.MessageCategory;
@@ -138,8 +137,6 @@ public final class TrustFactorService implements BukkitEventSubscriber {
       IntaveLogger.logger().info(message2);
     }
 
-    LogTransmittor logTransmittor = IntavePlugin.singletonInstance().logTransmittor();
-    logTransmittor.addPlayerLog(player, "(TRUST) " + message);
   }
 
   public int trustFactorSetting(String key, Player player) {

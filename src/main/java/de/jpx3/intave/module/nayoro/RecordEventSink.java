@@ -14,7 +14,6 @@ package de.jpx3.intave.module.nayoro;
 import ac.intave.samples.event.*;
 import ac.intave.samples.serial.JsonReader;
 import ac.intave.samples.serial.JsonWriter;
-import ac.intave.samples.share.Block;
 import ac.intave.samples.share.BlockUpdate;
 import ac.intave.samples.share.Classifier;
 import de.jpx3.intave.adapter.MinecraftVersion;
@@ -40,7 +39,7 @@ final class RecordEventSink extends EventSink {
   private final OutputStream output;
   private JsonWriter writer;
   private final Set<Integer> entities = new HashSet<>();
-  private final Map<de.jpx3.intave.share.BlockPosition, Block> recordedBlocks = new HashMap<>();
+  private final NearbyBlockTracker nearbyBlocks = new NearbyBlockTracker();
   private boolean setup = false;
   // Guarded by writeLock so an in-flight event either finishes before close or observes closure.
   private boolean closed = false;
@@ -122,8 +121,8 @@ final class RecordEventSink extends EventSink {
   @Override
   public synchronized void visit(PlayerMoveEvent event) {
     environment.mainPlayer().applyIfUserPresent(user -> {
-      List<BlockUpdate> updates = SampleTypes.dirtyNearbyBlocks(
-        user.blockCache(), user.meta().movement().boundingBox(), recordedBlocks
+      List<BlockUpdate> updates = nearbyBlocks.dirtyNearbyBlocks(
+        user.blockCache(), user.meta().movement().boundingBox()
       );
       for (BlockUpdatesEvent updateEvent : chunkBlockUpdates(updates)) {
         visitAny(updateEvent);

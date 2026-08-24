@@ -15,7 +15,6 @@ import ac.intave.samples.share.Block;
 import ac.intave.samples.share.BlockUpdate;
 import de.jpx3.intave.block.cache.BlockCache;
 import de.jpx3.intave.block.shape.BlockShapes;
-import de.jpx3.intave.share.BlockPosition;
 import de.jpx3.intave.share.BlockState;
 import de.jpx3.intave.share.BoundingBox;
 import org.bukkit.Material;
@@ -54,22 +53,16 @@ final class SampleTypesTest {
     int blockZ = 17;
     AtomicReference<BlockState> state = new AtomicReference<>(BlockState.stone());
     BlockCache blockCache = mutableBlockCacheAt(blockX, blockY, blockZ, state);
-    Map<BlockPosition, Block> recordedBlocks = new HashMap<>();
+    NearbyBlockTracker tracker = new NearbyBlockTracker();
     BoundingBox playerBox = BoundingBox.fromBounds(
       10.0, 64.0, 20.0,
       10.6, 65.8, 20.6
     );
 
-    List<BlockUpdate> initial = SampleTypes.dirtyNearbyBlocks(
-      blockCache, playerBox, recordedBlocks
-    );
-    List<BlockUpdate> unchanged = SampleTypes.dirtyNearbyBlocks(
-      blockCache, playerBox, recordedBlocks
-    );
+    List<BlockUpdate> initial = tracker.dirtyNearbyBlocks(blockCache, playerBox);
+    List<BlockUpdate> unchanged = tracker.dirtyNearbyBlocks(blockCache, playerBox);
     state.set(BlockState.empty());
-    List<BlockUpdate> removed = SampleTypes.dirtyNearbyBlocks(
-      blockCache, playerBox, recordedBlocks
-    );
+    List<BlockUpdate> removed = tracker.dirtyNearbyBlocks(blockCache, playerBox);
 
     assertEquals(1, initial.size());
     assertEquals("STONE", initial.getFirst().block().name());
@@ -79,6 +72,7 @@ final class SampleTypesTest {
     assertTrue(unchanged.isEmpty());
     assertEquals(1, removed.size());
     assertSame(Block.AIR, removed.getFirst().block());
+    assertEquals(0, tracker.recordedBlockCount());
   }
 
   @Test
@@ -100,7 +94,7 @@ final class SampleTypesTest {
       10.6, 65.8, 20.6
     );
 
-    SampleTypes.dirtyNearbyBlocks(blockCache, playerBox, new HashMap<>());
+    new NearbyBlockTracker().dirtyNearbyBlocks(blockCache, playerBox);
 
     assertEquals(392, accesses.get());
   }
@@ -112,20 +106,36 @@ final class SampleTypesTest {
     int blockZ = 20;
     AtomicReference<BlockState> state = new AtomicReference<>(blockState("north"));
     BlockCache blockCache = mutableBlockCacheAt(blockX, blockY, blockZ, state);
-    Map<BlockPosition, Block> recordedBlocks = new HashMap<>();
+    NearbyBlockTracker tracker = new NearbyBlockTracker();
     BoundingBox playerBox = BoundingBox.fromBounds(
       10.0, 64.0, 20.0,
       10.6, 65.8, 20.6
     );
 
-    SampleTypes.dirtyNearbyBlocks(blockCache, playerBox, recordedBlocks);
+    tracker.dirtyNearbyBlocks(blockCache, playerBox);
     state.set(blockState("south"));
-    List<BlockUpdate> updates = SampleTypes.dirtyNearbyBlocks(
-      blockCache, playerBox, recordedBlocks
-    );
+    List<BlockUpdate> updates = tracker.dirtyNearbyBlocks(blockCache, playerBox);
 
     assertEquals(1, updates.size());
     assertEquals("south", updates.getFirst().block().properties().get("facing"));
+  }
+
+  @Test
+  void emptyScansDoNotRetainAirBlocks() {
+    NearbyBlockTracker tracker = new NearbyBlockTracker();
+    BlockCache blockCache = mutableBlockCacheAt(
+      Integer.MIN_VALUE, Integer.MIN_VALUE, Integer.MIN_VALUE,
+      new AtomicReference<>(BlockState.empty())
+    );
+    BoundingBox playerBox = BoundingBox.fromBounds(
+      10.0, 64.0, 20.0,
+      10.6, 65.8, 20.6
+    );
+
+    List<BlockUpdate> updates = tracker.dirtyNearbyBlocks(blockCache, playerBox);
+
+    assertTrue(updates.isEmpty());
+    assertEquals(0, tracker.recordedBlockCount());
   }
 
   private static BlockState blockState(String facing) throws Exception {

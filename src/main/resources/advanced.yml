@@ -310,8 +310,6 @@ logging:
   command-execution: true
   # Show fault kicks in the console?
   fault-kicks: true
-  # Dump player log ids in the console?
-  cloud-log-ids: true
   # Verbose mode (ALL, MITIGATED, SELECTED)
   verbose-mode: MITIGATED
   # debugging purposes, do not activate

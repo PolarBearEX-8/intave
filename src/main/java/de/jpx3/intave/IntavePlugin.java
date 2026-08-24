@@ -35,7 +35,6 @@ import de.jpx3.intave.cleanup.GarbageCollector;
 import de.jpx3.intave.cleanup.ShutdownTasks;
 import de.jpx3.intave.cleanup.StartupTasks;
 import de.jpx3.intave.cloud.Cloud;
-import de.jpx3.intave.cloud.LogTransmittor;
 import de.jpx3.intave.command.CommandForwarder;
 import de.jpx3.intave.config.ConfigurationService;
 import de.jpx3.intave.connect.IntaveDomains;
@@ -97,7 +96,6 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
-import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 
@@ -109,7 +107,6 @@ public final class IntavePlugin extends JavaPlugin {
   private static String version = "UNKNOWN";
   private static String prefix = ChatColor.translateAlternateColorCodes('&', "&8[&c&lIntave&8]&7 ");
   private static String defaultColor = ChatColor.getLastColors(prefix);
-  private static final UUID gameId = UUID.randomUUID();
   private static boolean offlineMode = false, successfullyBooted = false;
 
   static {
@@ -117,7 +114,6 @@ public final class IntavePlugin extends JavaPlugin {
   }
 
   private IntaveLogger logger;
-  private LogTransmittor transmittor;
   private Cloud cloud;
 
   private SibylIntegrationService sibylIntegrationService;
@@ -225,9 +221,6 @@ public final class IntavePlugin extends JavaPlugin {
       cloud = new Cloud();
       cloud.init();
 
-      transmittor = new LogTransmittor();
-      transmittor.init();
-
       // stage 6
       Modules.proceedBoot(BootSegment.STAGE_6);
 
@@ -316,7 +309,7 @@ public final class IntavePlugin extends JavaPlugin {
       FaultKicks.applyFrom(configuration.getConfigurationSection("fault-kicks"));
       ConsoleOutput.applyFrom(configuration.getConfigurationSection("logging"));
       try {
-        cloud.configInit(configuration.getConfigurationSection("check.cloud"));
+        cloud.configInit(configuration);
       } catch (Exception exception) {
         logger.error("Something went wrong loading the cloud configuration");
         exception.printStackTrace();
@@ -691,10 +684,6 @@ public final class IntavePlugin extends JavaPlugin {
     return cloud;
   }
 
-  public LogTransmittor logTransmittor() {
-    return transmittor;
-  }
-
   public CheckService checks() {
     return checkService;
   }
@@ -740,10 +729,6 @@ public final class IntavePlugin extends JavaPlugin {
       return version.substring(lastPlusIndex + 1);
     }
     return "unknown";
-  }
-
-  public static UUID gameId() {
-    return gameId;
   }
 
   public static String prefix() {

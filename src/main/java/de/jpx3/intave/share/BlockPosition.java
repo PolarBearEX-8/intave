@@ -293,9 +293,13 @@ public final class BlockPosition extends RawVector3d {
    * Serialize this BlockPos into a long value
    */
   public long toLong() {
-    return ((long) this.x & X_MASK) << X_SHIFT
-      | ((long) this.y & Y_MASK) << Y_SHIFT
-      | ((long) this.z & Z_MASK);
+    return toLong(getX(), getY(), getZ());
+  }
+
+  public static long toLong(int x, int y, int z) {
+    return ((long) x & X_MASK) << X_SHIFT
+      | ((long) y & Y_MASK) << Y_SHIFT
+      | ((long) z & Z_MASK);
   }
 
   public static BlockPosition fromProtocolLib(com.comphenix.protocol.wrappers.BlockPosition blockPosition) {

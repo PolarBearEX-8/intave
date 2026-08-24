@@ -12,6 +12,7 @@
 package de.jpx3.intave.module.test.record;
 
 import de.jpx3.intave.adapter.MinecraftVersions;
+import de.jpx3.intave.block.cache.MockFullBlockStaticPlane;
 import de.jpx3.intave.module.test.record.action.Action;
 import de.jpx3.intave.module.test.record.action.ReceiveVelocity;
 import de.jpx3.intave.player.attribute.Attribute;
@@ -110,6 +111,26 @@ final class MovementRecordingWindowTest {
 
 		assertEquals(state, tail.frames().get(0).movementState());
 		assertEquals(2, tail.frames().get(0).movementState().reduceTicks());
+	}
+
+	@Test
+	void seededSolidBlockProducesOneRemovalDelta() {
+		BlockPosition block = new BlockPosition(0, 0, 0);
+		MovementRecording tail = MovementRecordingWindow.tail(recording(List.of(frame(
+			new Position(0, 0, 0), Rotation.zero(),
+			blocks(block, MaterialVariantStore.of(Material.STONE, 0))
+		)), Collections.emptyList()), 1);
+		MockFullBlockStaticPlane emptyWorld = new MockFullBlockStaticPlane();
+
+		tail.insertFrame(
+			BoundingBox.empty(), Input.none(), new Position(0, 0, 0), Rotation.zero(), emptyWorld, false
+		);
+		tail.insertFrame(
+			BoundingBox.empty(), Input.none(), new Position(0, 0, 0), Rotation.zero(), emptyWorld, false
+		);
+
+		assertEquals(MaterialVariantStore.air(), tail.frames().get(1).blocks().get(block));
+		assertTrue(tail.frames().get(2).blocks().isEmpty());
 	}
 
 

@@ -13,14 +13,12 @@ package de.jpx3.intave.module.violation;
 
 import ac.intave.cloud.protocol.packets.ServerboundViolation;
 import de.jpx3.intave.IntaveLogger;
-import de.jpx3.intave.IntavePlugin;
 import de.jpx3.intave.access.check.event.IntaveCommandExecutionEvent;
 import de.jpx3.intave.access.check.event.IntaveViolationEvent;
 import de.jpx3.intave.access.player.trust.TrustFactor;
 import de.jpx3.intave.check.Check;
 import de.jpx3.intave.check.CheckStatistics;
 import de.jpx3.intave.check.other.Cloud;
-import de.jpx3.intave.cloud.LogTransmittor;
 import de.jpx3.intave.executor.Synchronizer;
 import de.jpx3.intave.math.MathHelper;
 import de.jpx3.intave.metric.ServerHealth;
@@ -235,8 +233,6 @@ public final class ViolationProcessor extends Module {
       LOGGER_MESSAGE_LAYOUT, player.getName(), trustFactor,
       message, details, vlAdded, vlAfterViolation, checkName
     );
-    LogTransmittor logTransmittor = IntavePlugin.singletonInstance().logTransmittor();
-    logTransmittor.addPlayerLog(player, "(DET) " + consoleMessage);
     consoleMessage += " | TPS: " + ServerHealth.stringFormattedTick() + " Ping: " + user.latency() + "ms";
     plugin.logger().violation(consoleMessage);
   }
@@ -342,22 +338,9 @@ public final class ViolationProcessor extends Module {
     Violation violation = violationContext.violation();
     Player player = violation.findPlayer().orElseThrow(IllegalStateException::new);
 	  Synchronizer.synchronize(() -> {
-      LogTransmittor logTransmittor = IntavePlugin.singletonInstance().logTransmittor();
-      logTransmittor.addPlayerLog(player, "(EXE) " + command);
-
-      if (command.contains("{log-id}")) {
-        logTransmittor.awaitLogIdOf(player, logId -> {
-          String commandWithLogId = command.replace("{log-id}", logId);
-          Synchronizer.synchronize(() -> {
-            plugin.logger().commandExecution(commandWithLogId);
-            Bukkit.dispatchCommand(Bukkit.getConsoleSender(), commandWithLogId);
-          });
-        });
-      } else {
-
-        plugin.logger().commandExecution(command);
-        Bukkit.dispatchCommand(Bukkit.getConsoleSender(), command);
-      }
+      String resolvedCommand = command.replace("{log-id}", "No Log-Id");
+      plugin.logger().commandExecution(resolvedCommand);
+      Bukkit.dispatchCommand(Bukkit.getConsoleSender(), resolvedCommand);
     });
   }
 

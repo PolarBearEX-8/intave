@@ -166,7 +166,6 @@ public final class TeleportController implements PacketEventSubscriber {
 
     if (IntaveControl.DEBUG_TELEPORT_LOCKS) {
       IntaveLogger.logger().info("[Intave] Sent teleportation request to " + player.getName() + ": " + MathHelper.formatPosition(movementData.teleportLocation));
-      IntavePlugin.singletonInstance().logTransmittor().addPlayerLog(player, "(DEBUG/TELEPORT) Sent teleportation request to " + MathHelper.formatPosition(movementData.teleportLocation));
     }
 
     if (user.receives(MessageChannel.DEBUG_TELEPORT)) {
@@ -366,14 +365,12 @@ public final class TeleportController implements PacketEventSubscriber {
     if (movementData.awaitTeleport) {
       if (IntaveControl.DEBUG_TELEPORT_LOCKS) {
         IntaveLogger.logger().printLine("[Intave] Cancelled packet of " + player.getName() + " (Awaiting teleport accept)");
-        IntavePlugin.singletonInstance().logTransmittor().addPlayerLog(player, "(DEBUG/TELEPORT) Cancelled packet of " + player.getName() + " (Awaiting teleport accept)");
       }
 
       if (movementData.teleportResendCountdown-- < 0) {
         movementData.teleportResendCountdown = 20;
         if (IntaveControl.DEBUG_TELEPORT_LOCKS) {
           IntaveLogger.logger().printLine("[Intave] Resent teleport to " + player.getName());
-          IntavePlugin.singletonInstance().logTransmittor().addPlayerLog(player, "(DEBUG/TELEPORT) Resent teleport to " + player.getName());
         }
         Synchronizer.synchronize(() -> {
           Location location = movementData.teleportLocation.clone();
@@ -445,7 +442,6 @@ public final class TeleportController implements PacketEventSubscriber {
       isTeleport = true;
       if (IntaveControl.DEBUG_TELEPORT_LOCKS) {
         System.out.println("[Intave] " + player.getName() + " accepted teleport");
-        IntavePlugin.singletonInstance().logTransmittor().addPlayerLog(player, "(DEBUG/TELEPORT) " + player.getName() + " accepted teleport");
       }
       if (user.receives(MessageChannel.DEBUG_TELEPORT)) {
         player.sendMessage(IntavePlugin.prefix() + "Movement matched teleport request to " + MathHelper.formatPosition(teleportLocation));
@@ -458,7 +454,6 @@ public final class TeleportController implements PacketEventSubscriber {
       if (IntaveControl.DEBUG_TELEPORT_LOCKS) {
         String position = MathHelper.formatPosition(positionX, positionY, positionZ);
         System.out.println("[Intave] Checking potential teleport accept of " + player.getName() + " on " + position);
-        IntavePlugin.singletonInstance().logTransmittor().addPlayerLog(player, "(DEBUG/TELEPORT) Checking potential teleport accept of " + player.getName() + " on " + position);
       }
       boolean validPosition = positionDeviation < 0.00001 && movementData.transactionTeleportAllow;
       if (validPosition && movementData.expectTeleportWithRotation) {
@@ -469,7 +464,6 @@ public final class TeleportController implements PacketEventSubscriber {
         validPosition = yawDeviation < 0.001 && pitchDeviation < 0.001;
         if (IntaveControl.DEBUG_TELEPORT_LOCKS) {
           System.out.println("[Intave] Additional rotation check on " + player.getName() + ", difference is " + yawDeviation + "/" + pitchDeviation);
-          IntavePlugin.singletonInstance().logTransmittor().addPlayerLog(player, "(DEBUG/TELEPORT) Additional rotation check on " + player.getName() + ", difference is " + yawDeviation + "/" + pitchDeviation);
         }
         if (validPosition) {
           movementData.expectTeleportWithRotation = false;
@@ -479,10 +473,8 @@ public final class TeleportController implements PacketEventSubscriber {
       if (IntaveControl.DEBUG_TELEPORT_LOCKS) {
         if (validPosition) {
           System.out.println("[Intave] " + player.getName() + " accepted teleport request (release lock)");
-          IntavePlugin.singletonInstance().logTransmittor().addPlayerLog(player, "(DEBUG/TELEPORT) " + player.getName() + " accepted teleport request (release lock)");
         } else {
           System.out.println("[Intave] " + player.getName() + " did not accept the teleport request");
-          IntavePlugin.singletonInstance().logTransmittor().addPlayerLog(player, "(DEBUG/TELEPORT) " + player.getName() + " did not accept the teleport request");
         }
       }
       isTeleport = validPosition;

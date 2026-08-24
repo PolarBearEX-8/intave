@@ -31,7 +31,6 @@ import de.jpx3.intave.block.inside.BlockInsideChecks;
 import de.jpx3.intave.block.type.BlockTypeAccess;
 import de.jpx3.intave.check.movement.physics.environment.Pose;
 import de.jpx3.intave.cleanup.GarbageCollector;
-import de.jpx3.intave.cloud.LogTransmittor;
 import de.jpx3.intave.connect.customclient.CustomClientSupportConfig;
 import de.jpx3.intave.diagnostic.ConsoleOutput;
 import de.jpx3.intave.entity.size.HitboxSize;
@@ -164,12 +163,7 @@ final class PlayerUser implements User {
 
   private void outputVersionJoinInfo() {
     Player player = player();
-    LogTransmittor logTransmittor = IntavePlugin.singletonInstance().logTransmittor();
     ProtocolMetadata clientData = meta().protocol();
-    if (hasDisabledLogs()) {
-      logTransmittor.addPlayerLog(player, "[SYSTEM] Disabled logs");
-    }
-    logTransmittor.addPlayerLog(player, "(JOIN) " + player.getName() + " joined game "+IntavePlugin.gameId()+" with version " + clientData.versionString() + "/" + clientData.protocolVersion() + " and locale " + clientData.locale());
     if (!ConsoleOutput.CLIENT_VERSION_DEBUG) {
       return;
     }
@@ -179,15 +173,6 @@ final class PlayerUser implements User {
     }
     string += " and locale " + clientData.locale();
     IntaveLogger.logger().info(string);
-  }
-
-  private Boolean disabledCache = null;
-
-  private boolean hasDisabledLogs() {
-    if (disabledCache != null) {
-      return disabledCache;
-    }
-    return disabledCache = !IntavePlugin.singletonInstance().cloud().config().features().isCloudLogs();
   }
 
   @Override

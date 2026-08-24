@@ -376,7 +376,6 @@ public final class MovementDispatcher extends Module {
           double yawDifference = MathHelper.noAbsDistanceInDegrees(movement.lastRotationYaw, yaw);
           double pitchDifference = MathHelper.noAbsDistanceInDegrees(movement.lastRotationPitch, pitch);
           System.out.println("[Intave] Click movement ignore distance: " + distance + " yaw: " + yawDifference + " pitch: " + pitchDifference);
-          IntavePlugin.singletonInstance().logTransmittor().addPlayerLog(player, "(DEBUG/MOVEMENTIGNORE) Click movement ignore distance: " + distance + " yaw: " + yawDifference + " pitch: " + pitchDifference);
         }
         logging.logSystemMessage(user, () -> "MOVEMENT IGNORED: Click movement ignore distance: " + distance);
 
@@ -424,7 +423,6 @@ public final class MovementDispatcher extends Module {
     if (movement.awaitTeleport || movement.awaitOutgoingTeleport) {
       if (DEBUG_MOVEMENT_IGNORE) {
         System.out.println("[Intave] Teleport movement ignore " + movement.awaitTeleport + " " + movement.awaitOutgoingTeleport);
-        IntavePlugin.singletonInstance().logTransmittor().addPlayerLog(player, "(DEBUG/MOVEMENTIGNORE) Teleport movement ignore " + movement.awaitTeleport + " " + movement.awaitOutgoingTeleport);
       }
       event.setCancelled(true);
       movement.dropPostTickMotionProcessing = true;
@@ -438,7 +436,6 @@ public final class MovementDispatcher extends Module {
     if (distance > 50) {
       if (DEBUG_MOVEMENT_IGNORE) {
         System.out.println("[Intave] Distance movement ignore: " + distance);
-        IntavePlugin.singletonInstance().logTransmittor().addPlayerLog(player, "(DEBUG/MOVEMENTIGNORE) Distance movement ignore: " + distance);
       }
       logging.logSystemMessage(user, () -> "MOVEMENT REJECTED: Distance over limit: " + distance);
       movement.dropPostTickMotionProcessing = true;
@@ -492,7 +489,6 @@ public final class MovementDispatcher extends Module {
     if (violationLevelData.isInActiveTeleportBundle) {
       if (DEBUG_MOVEMENT_IGNORE) {
         System.out.println("[Intave] Teleport bundle movement ignore");
-        IntavePlugin.singletonInstance().logTransmittor().addPlayerLog(player, "(DEBUG/MOVEMENTIGNORE) Teleport bundle movement ignore");
       }
       logging.logSystemMessage(user, () -> "MOVEMENT IGNORED: Teleport bundle movement ignore");
       movement.dropPostTickMotionProcessing = true;
@@ -508,7 +504,6 @@ public final class MovementDispatcher extends Module {
     ) {
       if (DEBUG_MOVEMENT_IGNORE) {
         System.out.println("[Intave] Movement reset ignore");
-        IntavePlugin.singletonInstance().logTransmittor().addPlayerLog(player, "(DEBUG/MOVEMENTIGNORE) Movement reset ignore");
       }
       logging.logSystemMessage(user, () -> "MOVEMENT IGNORED: Movement reset ignore");
       movement.canResetMotion = false;
@@ -553,7 +548,6 @@ public final class MovementDispatcher extends Module {
     } else {
       if (DEBUG_MOVEMENT_IGNORE) {
         System.out.println("[Intave] Basic reset movement ignore");
-        IntavePlugin.singletonInstance().logTransmittor().addPlayerLog(player, "(DEBUG/MOVEMENTIGNORE) Basic reset movement ignore");
       }
       movement.canResetMotion = true;
     }
@@ -1133,7 +1127,6 @@ public final class MovementDispatcher extends Module {
 //          user.player().sendMessage("Item Usage Tick");
 //        });
 //        System.out.println("[Intave] Item Usage Tick");
-//        IntavePlugin.singletonInstance().logTransmittor().addPlayerLog(user.player(), "(DEBUG/MOVEMENTIGNORE) Item Usage Tick");
       }
     }
   }
