@@ -1,3 +1,14 @@
+/*
+ * Copyright 2026 Intave
+ *
+ * This software is licensed under the PolyForm Perimeter License 1.0.0.
+ * You may use this software for any purpose, except for providing to
+ * others any product that competes with the software.
+ *
+ * A copy of the license is available at:
+ *   https://polyformproject.org/licenses/perimeter/1.0.0/
+ */
+
 package de.jpx3.intave.user.meta;
 
 import com.comphenix.protocol.PacketType;
@@ -20,10 +31,7 @@ import de.jpx3.intave.packet.PacketSender;
 import org.bukkit.entity.Player;
 
 import java.util.*;
-import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.DelayQueue;
-import java.util.concurrent.ThreadLocalRandom;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 import java.util.concurrent.locks.ReentrantLock;
 
 public final class ConnectionMetadata {
@@ -39,7 +47,7 @@ public final class ConnectionMetadata {
   private final List<Entity> synchronizedEntities = Lists.newCopyOnWriteArrayList();
   public PendingCountingFeedbackObserver pendingBlockUpdates;
   private List<Entity> tickedEntities = new CopyOnWriteArrayList<>();
-  private final Map<Long, Long> remainingPingPacketTimestamps = Maps.newConcurrentMap();
+  private final Map<Long, Deque<Long>> remainingPingPacketTimestamps = new ConcurrentHashMap<>();
   private final List<Long> latencyDifferenceBalance = Lists.newCopyOnWriteArrayList();
 
   // not used
@@ -387,8 +395,40 @@ public final class ConnectionMetadata {
     this.tickedEntities = ticked;
   }
 
-  public Map<Long, Long> pingPackets() {
-    return remainingPingPacketTimestamps;
+  public void addPendingKeepAlive(long identifier, long sentAt) {
+    remainingPingPacketTimestamps.compute(identifier, (key, timestamps) -> {
+      Deque<Long> pending = timestamps;
+      if (pending == null) {
+        pending = new ConcurrentLinkedDeque<>();
+      }
+      pending.addLast(sentAt);
+      return pending;
+    });
+  }
+
+  public @Nullable Long pollPendingKeepAlive(long identifier) {
+    Long[] result = new Long[1];
+    remainingPingPacketTimestamps.computeIfPresent(identifier, (key, timestamps) -> {
+      result[0] = timestamps.pollFirst();
+      return timestamps.isEmpty() ? null : timestamps;
+    });
+    return result[0];
+  }
+
+  public void discardPendingKeepAlivesBefore(long cutoff) {
+    for (Long identifier : remainingPingPacketTimestamps.keySet()) {
+      remainingPingPacketTimestamps.computeIfPresent(identifier, (key, timestamps) -> {
+        Long first;
+        while ((first = timestamps.peekFirst()) != null && first < cutoff) {
+          timestamps.pollFirst();
+        }
+        return timestamps.isEmpty() ? null : timestamps;
+      });
+    }
+  }
+
+  public Set<Long> pendingKeepAliveIdentifiers() {
+    return new HashSet<>(remainingPingPacketTimestamps.keySet());
   }
 
   public List<Long> latencyDifferenceBalance() {
