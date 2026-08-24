@@ -319,6 +319,14 @@ final class CertificateTest {
 		assertThrows(
 			IllegalArgumentException.class,
 			() -> Certificate.generate(
+				"CN=Unsupported",
+				2050,
+				Duration.ofDays(1)
+			)
+		);
+		assertThrows(
+			IllegalArgumentException.class,
+			() -> Certificate.generate(
 				"CN=Expired",
 				2048,
 				Duration.ZERO
@@ -396,6 +404,16 @@ final class CertificateTest {
 		);
 
 		shortLived.x509Certificate().get().checkValidity();
+	}
+
+	@Test
+	void loadingRejectsLargeMalformedPemInput() {
+		String malformedPem = "-----BEGIN " + " ".repeat(100_000) + "-----";
+
+		assertThrows(
+			IllegalArgumentException.class,
+			() -> Certificate.from(resource(malformedPem))
+		);
 	}
 
 	private static void assertLoadedKeyPairMatches(Certificate loaded) {

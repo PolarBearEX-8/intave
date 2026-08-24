@@ -11,11 +11,7 @@
 
 package de.jpx3.intave.module.nayoro;
 
-import ac.intave.samples.share.Block;
-import ac.intave.samples.share.BlockUpdate;
-import ac.intave.samples.share.Hand;
-import ac.intave.samples.share.Item;
-import ac.intave.samples.share.ItemCategory;
+import ac.intave.samples.share.*;
 import com.comphenix.protocol.wrappers.EnumWrappers;
 import de.jpx3.intave.block.cache.BlockCache;
 import de.jpx3.intave.entity.size.HitboxSize;
@@ -26,17 +22,13 @@ import de.jpx3.intave.share.RawVector3d;
 import org.bukkit.Material;
 import org.bukkit.inventory.ItemStack;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.SortedMap;
-import java.util.TreeMap;
+import java.util.*;
 
 import static de.jpx3.intave.share.ClientMath.floor;
 
 /** Converts Intave runtime values at the boundary of the samples API. */
 public final class SampleTypes {
-  private static final double NEARBY_BLOCK_RADIUS = 6.0D;
+  private static final double NEARBY_BLOCK_RADIUS = 3.0D;
 
   private SampleTypes() {
   }

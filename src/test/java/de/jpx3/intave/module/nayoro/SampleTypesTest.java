@@ -26,11 +26,10 @@ import java.lang.reflect.Proxy;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertSame;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 final class SampleTypesTest {
   @Test
@@ -49,10 +48,10 @@ final class SampleTypesTest {
   }
 
   @Test
-  void dirtyBlocksUsePtrRadiusAndSendAirTombstones() {
-    int blockX = 4;
-    int blockY = 58;
-    int blockZ = 14;
+  void dirtyBlocksUseReducedRadiusAndSendAirTombstones() {
+    int blockX = 7;
+    int blockY = 61;
+    int blockZ = 17;
     AtomicReference<BlockState> state = new AtomicReference<>(BlockState.stone());
     BlockCache blockCache = mutableBlockCacheAt(blockX, blockY, blockZ, state);
     Map<BlockPosition, Block> recordedBlocks = new HashMap<>();
@@ -80,6 +79,30 @@ final class SampleTypesTest {
     assertTrue(unchanged.isEmpty());
     assertEquals(1, removed.size());
     assertSame(Block.AIR, removed.getFirst().block());
+  }
+
+  @Test
+  void dirtyBlockScanIsBoundedToReducedRadius() {
+    AtomicInteger accesses = new AtomicInteger();
+    BlockCache blockCache = (BlockCache) Proxy.newProxyInstance(
+      BlockCache.class.getClassLoader(),
+      new Class<?>[]{BlockCache.class},
+      (proxy, method, arguments) -> {
+        if (method.getName().equals("stateAt")) {
+          accesses.incrementAndGet();
+          return BlockState.empty();
+        }
+        throw new UnsupportedOperationException(method.getName());
+      }
+    );
+    BoundingBox playerBox = BoundingBox.fromBounds(
+      10.0, 64.0, 20.0,
+      10.6, 65.8, 20.6
+    );
+
+    SampleTypes.dirtyNearbyBlocks(blockCache, playerBox, new HashMap<>());
+
+    assertEquals(392, accesses.get());
   }
 
   @Test

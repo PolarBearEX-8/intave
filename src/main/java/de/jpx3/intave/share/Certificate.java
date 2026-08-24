@@ -39,17 +39,17 @@ import java.util.Base64;
 import java.util.Date;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 public final class Certificate {
 	private static final String KEY_ALGORITHM = "RSA";
 	private static final String SIGNATURE_ALGORITHM = "SHA256withRSA";
+	private static final String PEM_BEGIN_PREFIX = "-----BEGIN ";
+	private static final String PEM_BOUNDARY_SUFFIX = "-----";
+	private static final String PEM_END_PREFIX = "-----END ";
 
 	private static final int DEFAULT_KEY_SIZE = 3072;
 	private static final Duration DEFAULT_VALIDITY = Duration.ofDays(3650);
 	private static final SecureRandom SECURE_RANDOM = new SecureRandom();
-	private static final Pattern PEM_PATTERN = Pattern.compile("-----BEGIN ([A-Z0-9 ]+)-----\\s*(.*?)\\s*-----END \\1-----", Pattern.DOTALL);
 
 	private final PublicKey publicKey;
 	private final PrivateKey privateKey;
@@ -76,7 +76,7 @@ public final class Certificate {
 	 * Generates a new RSA key pair and a self-signed X.509 certificate.
 	 *
 	 * @param distinguishedName certificate subject
-	 * @param keySize           RSA key size; normally 2048, 3072, or 4096
+	 * @param keySize           RSA key size; must be 2048, 3072, or 4096
 	 * @param validity          certificate validity duration
 	 */
 	public static Certificate generate(String distinguishedName, int keySize, Duration validity) {
@@ -85,10 +85,6 @@ public final class Certificate {
 
 		if (distinguishedName.trim().isEmpty()) {
 			throw new IllegalArgumentException("Distinguished name cannot be empty");
-		}
-
-		if (keySize < 2048) {
-			throw new IllegalArgumentException("RSA key size must be at least 2048 bits");
 		}
 
 		if (validity.isZero() || validity.isNegative()) {
@@ -105,7 +101,7 @@ public final class Certificate {
 
 		try {
 			KeyPairGenerator generator = KeyPairGenerator.getInstance(KEY_ALGORITHM);
-			generator.initialize(keySize, SECURE_RANDOM);
+			initializeKeyPairGenerator(generator, keySize);
 			KeyPair keyPair = generator.generateKeyPair();
 			X509Certificate certificate = createSelfSignedCertificate(keyPair, subject, validity);
 			return new Certificate(keyPair.getPublic(), keyPair.getPrivate(), certificate);
@@ -113,6 +109,22 @@ public final class Certificate {
 			throw exception;
 		} catch (Exception exception) {
 			throw new IllegalStateException("Could not generate RSA certificate", exception);
+		}
+	}
+
+	private static void initializeKeyPairGenerator(KeyPairGenerator generator, int keySize) {
+		switch (keySize) {
+			case 2048:
+				generator.initialize(2048, SECURE_RANDOM);
+				break;
+			case 3072:
+				generator.initialize(3072, SECURE_RANDOM);
+				break;
+			case 4096:
+				generator.initialize(4096, SECURE_RANDOM);
+				break;
+			default:
+				throw new IllegalArgumentException("RSA key size must be 2048, 3072, or 4096 bits");
 		}
 	}
 
@@ -456,17 +468,67 @@ public final class Certificate {
 		if (!value.startsWith("-----BEGIN")) {
 			return new PemBlock(null, encoded);
 		}
-		Matcher matcher = PEM_PATTERN.matcher(value);
-		if (!matcher.matches()) {
+
+		if (!value.startsWith(PEM_BEGIN_PREFIX)) {
 			throw new IllegalArgumentException("Invalid PEM data");
 		}
-		String label = matcher.group(1).trim();
-		String base64 = matcher.group(2).replaceAll("\\s", "");
+
+		int labelStart = PEM_BEGIN_PREFIX.length();
+		int labelEnd = value.indexOf(PEM_BOUNDARY_SUFFIX, labelStart);
+		if (labelEnd < 0) {
+			throw new IllegalArgumentException("Invalid PEM data");
+		}
+
+		String rawLabel = value.substring(labelStart, labelEnd);
+		if (!isValidPemLabel(rawLabel)) {
+			throw new IllegalArgumentException("Invalid PEM data");
+		}
+
+		int bodyStart = labelEnd + PEM_BOUNDARY_SUFFIX.length();
+		String endBoundary = PEM_END_PREFIX + rawLabel + PEM_BOUNDARY_SUFFIX;
+		int bodyEnd = value.length() - endBoundary.length();
+		if (bodyEnd < bodyStart || !value.startsWith(endBoundary, bodyEnd)) {
+			throw new IllegalArgumentException("Invalid PEM data");
+		}
+
+		String label = rawLabel.trim();
+		String base64 = removePemWhitespace(value, bodyStart, bodyEnd);
 		try {
 			return new PemBlock(label, Base64.getDecoder().decode(base64));
 		} catch (IllegalArgumentException exception) {
 			throw new IllegalArgumentException("PEM resource contains invalid Base64 data", exception);
 		}
+	}
+
+	private static boolean isValidPemLabel(String label) {
+		if (label.isEmpty()) {
+			return false;
+		}
+		for (int index = 0; index < label.length(); index++) {
+			char character = label.charAt(index);
+			if ((character < 'A' || character > 'Z')
+				&& (character < '0' || character > '9')
+				&& character != ' ') {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	private static String removePemWhitespace(String value, int start, int end) {
+		StringBuilder result = new StringBuilder(end - start);
+		for (int index = start; index < end; index++) {
+			char character = value.charAt(index);
+			if (character != ' '
+				&& character != '\t'
+				&& character != '\n'
+				&& character != '\u000B'
+				&& character != '\f'
+				&& character != '\r') {
+				result.append(character);
+			}
+		}
+		return result.toString();
 	}
 
 	private static byte[] toPem(String label, byte[] der) {
