@@ -51,7 +51,7 @@ check:
 
     # The maximum ticks a player is allowed to exist behind server tick, aka. "blink", -1 to disable
     # An aggressive setting would be 3 seconds = 60 ticks
-    blink-limit: -1
+    blink-limit: 5
 
     # Do you want to block pulse-blinking?
     block-pulse-blink: true

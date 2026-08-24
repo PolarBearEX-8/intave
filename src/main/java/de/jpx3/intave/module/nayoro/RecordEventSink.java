@@ -25,14 +25,7 @@ import de.jpx3.intave.version.ProtocolVersionConverter;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.StringWriter;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -49,6 +42,8 @@ final class RecordEventSink extends EventSink {
   private final Set<Integer> entities = new HashSet<>();
   private final Map<de.jpx3.intave.share.BlockPosition, Block> recordedBlocks = new HashMap<>();
   private boolean setup = false;
+  // Guarded by writeLock so an in-flight event either finishes before close or observes closure.
+  private boolean closed = false;
   private final Classifier classifier;
   private final Lock writeLock = new ReentrantLock();
 
@@ -149,6 +144,9 @@ final class RecordEventSink extends EventSink {
     setupIfNeeded();
     try {
       writeLock.lock();
+      if (closed) {
+        return;
+      }
       long now = System.currentTimeMillis();
       event.withOffset(Math.max(0, now - lastEventAt));
       lastEventAt = now;
@@ -163,6 +161,10 @@ final class RecordEventSink extends EventSink {
     setupIfNeeded();
     try {
       writeLock.lock();
+      if (closed) {
+        return;
+      }
+      closed = true;
       writer.close();
     } finally {
       writeLock.unlock();

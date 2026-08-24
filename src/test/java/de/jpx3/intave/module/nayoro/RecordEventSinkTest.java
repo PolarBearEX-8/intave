@@ -13,6 +13,7 @@ package de.jpx3.intave.module.nayoro;
 
 import ac.intave.samples.event.BlockUpdatesEvent;
 import ac.intave.samples.event.Event;
+import ac.intave.samples.event.PropertiesEvent;
 import ac.intave.samples.serial.JsonReader;
 import ac.intave.samples.serial.JsonWriter;
 import ac.intave.samples.share.Block;
@@ -21,18 +22,32 @@ import ac.intave.samples.share.BlockUpdate;
 import ac.intave.samples.share.BoundingBox;
 import org.junit.jupiter.api.Test;
 
+import java.io.ByteArrayOutputStream;
 import java.io.StringReader;
 import java.io.StringWriter;
+import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertInstanceOf;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 final class RecordEventSinkTest {
+  @Test
+  void ignoresEventsDeliveredAfterClose() throws Exception {
+    ByteArrayOutputStream output = new ByteArrayOutputStream();
+    RecordEventSink sink = new RecordEventSink(null, output);
+    initializeWriter(sink, output);
+
+    sink.visitAny(new PropertiesEvent(Collections.emptyMap()));
+    sink.close();
+    int sizeAfterClose = output.size();
+
+    assertDoesNotThrow(() -> sink.visitAny(new PropertiesEvent(Collections.emptyMap())));
+    assertDoesNotThrow(sink::close);
+    assertEquals(sizeAfterClose, output.size());
+  }
+
   @Test
   void splitsComplexUpdatesIntoConsecutiveReadableEvents() throws Exception {
     List<BlockUpdate> updates = updates(24, 40);
@@ -87,5 +102,15 @@ final class RecordEventSinkTest {
       updates.add(new BlockUpdate(new BlockPosition(index, 64, 0), block));
     }
     return updates;
+  }
+
+  private static void initializeWriter(RecordEventSink sink, ByteArrayOutputStream output) throws Exception {
+    Field writer = RecordEventSink.class.getDeclaredField("writer");
+    writer.setAccessible(true);
+    writer.set(sink, new JsonWriter(output));
+
+    Field setup = RecordEventSink.class.getDeclaredField("setup");
+    setup.setAccessible(true);
+    setup.setBoolean(sink, true);
   }
 }

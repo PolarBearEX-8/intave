@@ -71,9 +71,9 @@ dependencies {
   testImplementation("io.netty:netty-all:4.2.15.Final")
 
   // Loaded by Libraries.setupLibraries() when the plugin starts.
-  compileOnly("ac.intave:samples:0.0.6")
+  compileOnly("ac.intave:samples:0.0.7")
   compileOnly("ac.intave:cloud-protocol:0.0.4") { isTransitive = false }
-  testImplementation("ac.intave:samples:0.0.6")
+  testImplementation("ac.intave:samples:0.0.7")
   testImplementation("ac.intave:cloud-protocol:0.0.4") { isTransitive = false }
 
   // random shit[

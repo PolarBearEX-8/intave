@@ -15,20 +15,13 @@ import com.comphenix.protocol.events.PacketContainer;
 import com.comphenix.protocol.events.PacketEvent;
 import com.comphenix.protocol.utility.MinecraftReflection;
 import com.comphenix.protocol.wrappers.EnumWrappers;
-import com.google.gson.stream.JsonReader;
-import com.google.gson.stream.JsonWriter;
 import de.jpx3.intave.IntaveLogger;
 import de.jpx3.intave.access.InvalidDependencyException;
-import de.jpx3.intave.codec.StreamCodec;
 import org.bukkit.Bukkit;
 
 import java.util.Arrays;
 
-import static de.jpx3.intave.codec.JsonStreamCodecs.enumCodec;
-
 public final class ProtocolLibraryAdapter {
-  public static final StreamCodec<JsonReader, JsonWriter, EnumWrappers.Hand> HAND_JSON_CODEC =
-    enumCodec(EnumWrappers.Hand.class);
 
   private static final String PROTOCOLLIB_OUTDATED = "Your version of ProtocolLib is outdated";
 

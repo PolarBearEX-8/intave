@@ -14,7 +14,6 @@ package de.jpx3.intave.module.nayoro;
 import ac.intave.samples.event.Event;
 import ac.intave.samples.event.EventSink;
 import ac.intave.samples.share.Classifier;
-import com.google.common.collect.Sets;
 import de.jpx3.intave.IntaveControl;
 import de.jpx3.intave.IntavePlugin;
 import de.jpx3.intave.cleanup.GarbageCollector;
@@ -37,6 +36,7 @@ import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Collectors;
@@ -130,11 +130,13 @@ public final class Nayoro extends Module {
       }
       recording.put(user.id(), false);
       OperationalMode mode = recordingMode.get(user.id());
-      List<EventSink> remove = eventSinks.get(user).stream()
+      Set<EventSink> sinks = eventSinks.get(user);
+      List<EventSink> remove = sinks.stream()
         .filter(eventSink -> eventSink instanceof RecordEventSink)
-        .peek(EventSink::close)
         .collect(Collectors.toList());
-      remove.forEach(eventSinks.get(user)::remove);
+      // Stop new dispatches before closing; an in-flight snapshot is handled by RecordEventSink.
+      remove.forEach(sinks::remove);
+      remove.forEach(EventSink::close);
       Sample sample = samples.remove(user.id());
       if (sample != null && !mode.keepCopyOfSamples()) {
         sample.delete();
@@ -246,6 +248,6 @@ public final class Nayoro extends Module {
     PlayerContainer player = new UserPlayerContainer(
       user, new LiveEnvironment(user)
     );
-    return Sets.newHashSet(new ForwardEventSink(player));
+    return new CopyOnWriteArraySet<>(Collections.singleton(new ForwardEventSink(player)));
   }
 }
