@@ -243,9 +243,6 @@ blacklist:
   message-in-chat: false
   message: "&cYou are on an anti-cheat blacklist and can't join this server"
 
-proxy:
-  enable: false
-
 clientwarning:
   enable: true
 
