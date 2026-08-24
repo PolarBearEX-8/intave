@@ -87,7 +87,6 @@ public final class MiscBukkitEvents extends Module {
   public void on(WorldUnloadEvent unloadEvent) {
     World world = unloadEvent.getWorld();
     GarbageCollector.clear(world);
-//    GarbageCollector.clear(world.getUID());
     GarbageCollector.clearIf(o -> o instanceof Location && ((Location) o).getWorld().equals(world));
   }
 
@@ -96,6 +95,7 @@ public final class MiscBukkitEvents extends Module {
     Player player = quit.getPlayer();
     GarbageCollector.clear(player);
     GarbageCollector.clear(player.getUniqueId());
+    GarbageCollector.clearIf(o -> o.equals(player) || o.equals(player.getUniqueId()));
   }
 
   /*

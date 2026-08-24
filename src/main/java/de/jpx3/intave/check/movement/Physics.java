@@ -764,55 +764,17 @@ public final class Physics extends Check {
       String expected = formatPosition(predictedOffsetX, predictedOffsetY, predictedOffsetZ);
       String actual = formatPosition(actualMotion.motionX, actualMotion.motionY, actualMotion.motionZ);
 
-//      PhysicsReport report = physicsReport == null ? new PhysicsReport(user) : physicsReport;
-//      try {
-//        ReportFileWriter.writeNew(
-//          IntavePlugin.singletonInstance().getDataFolder().toPath().resolve("physicsreports"),
-//          "intave-physicsreport",
-//          report
-//        );
-//      } catch (IOException | RuntimeException exception) {
-//        IntaveLogger.logger().error(
-//          "Unable to write physics report: "
-//            + exception.getClass().getSimpleName()
-//            + ": "
-//            + exception.getMessage()
-//        );
-//      }
+//      user.sendReport(physicsReport == null ? new PhysicsReport(user) : physicsReport);
 
-	    String message = "moved incorrectly";
-//      String details = received + " actual: " + expected;
-      String details = "";
+      String message = "moved incorrectly";
+      String details = "Δ" + formatDouble(distance, 6)
+        + " / \uD83D\uDD0D" + simulation.simulationCount();
 
-      details += formatDouble(distance, 6) + " / ";
-
-      String vlInfo = "";
-      if (verticalViolationIncrease > 500) {
-        vlInfo += "mv";
-      } else if (verticalViolationIncrease < 0.1) {
-        vlInfo += "0v";
-      } else {
-        vlInfo += formatDouble(verticalViolationIncrease, 1) + "v";
-      }
-      if (horizontalViolationIncrease > 500) {
-        vlInfo += "mh";
-      } else if (horizontalViolationIncrease < 0.1) {
-        vlInfo += "0h";
-      } else {
-        vlInfo += formatDouble(horizontalViolationIncrease, 1) + "h";
-      }
-      details += vlInfo + " / ";
-
-      details += simulation.blueDetails().replace('/', '_');
-//      details += formatDouble(-differenceX, 4) + "dx " + formatDouble(-differenceY, 4) + "dy " + formatDouble(-differenceZ, 4) + "dz";
-
-      if (velocityDetected) {
-        details += ", strict";
+      if (user.meta().protocol().flyingPacketsCausePositionUncertainty()) {
+        details += "↧" + simulation.searchDepth();
       }
 
       if (movementData.forceCorrectReduce) {
-        details += velocityDetected ? "&" : ",";
-        details += " reduce force";
         user.nerf(AttackNerfStrategy.BLOCKING, "46");
       }
 
@@ -958,6 +920,13 @@ public final class Physics extends Check {
       }
 
       if (setback) {
+        recorder.physicsSetback(
+          user,
+          violation.message(),
+          violation.details(),
+          violation.addedViolationPoints(),
+          violationContext.violationLevelAfter()
+        );
         // resend attributes
         statisticApply(user, CheckStatistics::increaseFails);
 

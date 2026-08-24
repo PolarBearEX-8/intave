@@ -33,7 +33,7 @@ import java.util.Collections;
 import java.util.EnumMap;
 import java.util.List;
 
-public final class ImmutableSimulationEnvironmentCopy implements SimulationEnvironment {
+final class ImmutableSimulationEnvironmentCopy implements SimulationEnvironment {
 	private final User user;
 	private final Pose pose;
 	private final Vector lookVector;

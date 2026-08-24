@@ -36,6 +36,11 @@ public final class Position implements Serializable, Cloneable {
 		doubleField("z", Position::getZ),
 		Position::new
 	);
+	public static final StreamCodec<JsonReader, JsonWriter, Position> BLOCK_JSON_CODEC =
+		BlockPosition.JSON_CODEC.beforeAndAfter(
+			position -> new Position(position.getX(), position.getY(), position.getZ()),
+			Position::toBlockPosition
+		);
 	public static final StreamCodec<ByteBuf, ByteBuf, Position> STREAM_CODEC = StreamCodec.of(
 		(byteBuf, position) -> {
 			byteBuf.writeDouble(position.x);

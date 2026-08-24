@@ -56,6 +56,7 @@ import org.jetbrains.annotations.NotNull;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.LongAdder;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -100,7 +101,6 @@ public final class MovementMetadata implements SimulationEnvironment {
   public boolean acceptSneakFaults = true;
   public float rotationYaw, rotationPitch;
   public float lastRotationYaw, lastRotationPitch;
-  public long recordedMoves;
   public long invalidVehiclePositionTicks = 0;
   // Timestamps
   public long lastTimeSneaking, lastTimeJumped, lastRotation;
@@ -246,6 +246,9 @@ public final class MovementMetadata implements SimulationEnvironment {
       pastTracker.put(value, value.pastDefault());
     }
   }
+
+  public LongAdder activeTicks = new LongAdder();
+  public LongAdder passiveTicks = new LongAdder();
 
   public SimulationEnvironment beforePreviousTickEnvironment;
 
@@ -879,8 +882,11 @@ public final class MovementMetadata implements SimulationEnvironment {
         return false;
       });
     }
-
     // </performance>
+    // <analytics>
+    boolean active = simulation.configuration().anyKeypress() || simulation.environment().rotated();
+    (active ? activeTicks : passiveTicks).increment();
+	  // </analytics>
     setLastMovementConfiguration(configuration);
     setSimulationResult(collider);
   }
@@ -1258,6 +1264,7 @@ public final class MovementMetadata implements SimulationEnvironment {
     }
   }
 
+  /** Restores combat and item-use timing inputs that are consumed directly by movement search. */
   public void restoreRecordedCombatState(
     int reduceTicks,
     int attackReduceTicksPast,

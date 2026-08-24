@@ -397,13 +397,30 @@ final class MovementRecordingPhysicsTests {
 
 			if (loss > allowedLoss && tick > 16) {
 				System.out.println("\r" + "[FAILED] " + resourcePath + " (tick " + tick + ")");
+				String failureReportLink = null;
+				try {
+					Path report = PtrBranchingVisualizationTest.writeFailureReport(
+						resourcePath,
+						recording,
+						tick,
+						simulation,
+						metadata.sentOffsetMotion()
+					);
+					failureReportLink = PtrBranchingVisualizationTest.printReportLink(report, tick);
+				} catch (Exception | AssertionError reportFailure) {
+					System.out.println(
+						"[REPORT] Unable to write tick " + tick + " report: "
+							+ reportFailure.getMessage()
+					);
+				}
 				printFailureReport(
 					resourcePath, recording, frames, tick, loss, allowedLoss,
 					lastMessages, blockCache, user, metadata, simulation, processor, simulator
 				);
 				fail("Movement diverged at tick " + tick + ": loss "
 					+ formatDiagnosticDouble(loss) + " exceeds "
-					+ formatDiagnosticDouble(allowedLoss));
+					+ formatDiagnosticDouble(allowedLoss)
+					+ (failureReportLink == null ? "" : "\nPTR report: " + failureReportLink));
 			}
 
 			System.out.print("\r" + output);

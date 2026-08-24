@@ -243,6 +243,8 @@ public final class ThreeTickSimulationSearch implements SimulationSearch {
 			return bestSimulation;
 		}
 		bestSimulation.appendBlue("pf/" + simulations.simulationsDone() + "es");
+		bestSimulation.setSimulationCount(simulations.simulationsDone());
+		bestSimulation.setSearchDepth(0);
 		applySimulation(user, bestSimulation);
 		user.meta().movement().simulationRateLimiter.noteAcquired(simulations.simulationsDone());
 		return bestSimulation;
@@ -260,6 +262,8 @@ public final class ThreeTickSimulationSearch implements SimulationSearch {
 		simulation.appendBlue(
 			precedingFlyingPackets + "f/" + totalSimulationsDone + "es"
 		);
+		simulation.setSimulationCount(totalSimulationsDone);
+		simulation.setSearchDepth(precedingFlyingPackets);
 		applySimulation(user, simulation);
 		user.meta().movement().simulationRateLimiter.noteAcquired(totalSimulationsDone);
 		return simulation;
@@ -297,6 +301,7 @@ public final class ThreeTickSimulationSearch implements SimulationSearch {
 
 		List<Simulation> firstTickFlyingSimulations = firstTickContainer.flyingSimulations();
 		Simulation bestSimulation = firstTickContainer.bestSimulation();
+		bestSimulation.setSearchDepth(0);
 
 		if (firstTickFlyingSimulations.isEmpty() || bestSimulation.offsetDifference() < requiredAccuracyFirstTick) {
 			if (bestSimulation.canFinishExplicitTick()) {
@@ -307,6 +312,7 @@ public final class ThreeTickSimulationSearch implements SimulationSearch {
 				if (durationMs > 0.1) {
 					bestSimulation.appendBlue(formatDouble(durationMs, 2) + "ms");
 				}
+				bestSimulation.setSimulationCount(totalSimulationsDone);
 				applySimulation(user, bestSimulation);
 				if (firstTickFlyingSimulations.isEmpty()) {
 					bestSimulation.setWasFromExhaustiveSearch();
@@ -340,6 +346,7 @@ public final class ThreeTickSimulationSearch implements SimulationSearch {
 
 			Simulation secondTickSimulation = secondTickContainer.bestSimulation();
 			secondTickSimulation.appendBlue("1f/" + firstTickFlyingSimulations.size() + "x");
+			secondTickSimulation.setSearchDepth(1);
 
 			double secondTickDistance = secondTickSimulation.positionDifference(receivedPosition);
 			if (secondTickDistance < bestDistance && secondTickSimulation.canFinishExplicitTick()) {
@@ -355,6 +362,7 @@ public final class ThreeTickSimulationSearch implements SimulationSearch {
 				if (durationMs > 0.1) {
 					bestSimulation.appendBlue(formatDouble(durationMs, 2) + "ms");
 				}
+				bestSimulation.setSimulationCount(totalSimulationsDone);
 				applySimulation(user, bestSimulation);
 				ratelimiter.noteAcquired(totalSimulationsDone);
 				return bestSimulation;
@@ -386,6 +394,7 @@ public final class ThreeTickSimulationSearch implements SimulationSearch {
 
 				Simulation thirdTickSimulation = thirdTickContainer.bestSimulation();
 				thirdTickSimulation.appendBlue("2f/" + secondTickFlyingCandidates.size() + "x");
+				thirdTickSimulation.setSearchDepth(2);
 				double thirdTickDistance = thirdTickSimulation.positionDifference(receivedPosition);
 				if (thirdTickDistance < bestDistance && thirdTickSimulation.canFinishExplicitTick()) {
 					bestSimulation = thirdTickSimulation.reusableCopy();
@@ -400,6 +409,7 @@ public final class ThreeTickSimulationSearch implements SimulationSearch {
 					if (durationMs > 0.1) {
 						bestSimulation.appendBlue(formatDouble(durationMs, 2) + "ms");
 					}
+					bestSimulation.setSimulationCount(totalSimulationsDone);
 					applySimulation(user, bestSimulation);
 					ratelimiter.noteAcquired(totalSimulationsDone);
 					return bestSimulation;
@@ -414,6 +424,7 @@ public final class ThreeTickSimulationSearch implements SimulationSearch {
 			bestSimulation.appendBlue(formatDouble(durationMs, 2) + "ms");
 		}
 		bestSimulation.setWasFromExhaustiveSearch();
+		bestSimulation.setSimulationCount(totalSimulationsDone);
 		applySimulation(user, bestSimulation);
 		ratelimiter.noteAcquired(totalSimulationsDone);
 		return bestSimulation;

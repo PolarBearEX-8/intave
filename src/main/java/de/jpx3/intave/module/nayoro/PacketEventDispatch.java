@@ -11,6 +11,10 @@
 
 package de.jpx3.intave.module.nayoro;
 
+import ac.intave.samples.event.*;
+import ac.intave.samples.share.Item;
+import ac.intave.samples.share.Position;
+import ac.intave.samples.share.Rotation;
 import com.comphenix.protocol.events.PacketContainer;
 import com.comphenix.protocol.events.PacketEvent;
 import com.comphenix.protocol.wrappers.EnumWrappers;
@@ -18,8 +22,6 @@ import de.jpx3.intave.module.linker.packet.ListenerPriority;
 import de.jpx3.intave.module.linker.packet.PacketEventSubscriber;
 import de.jpx3.intave.module.linker.packet.PacketId;
 import de.jpx3.intave.module.linker.packet.PacketSubscription;
-import de.jpx3.intave.module.nayoro.event.*;
-import de.jpx3.intave.module.nayoro.event.sink.EventSink;
 import de.jpx3.intave.packet.reader.*;
 import de.jpx3.intave.user.User;
 import de.jpx3.intave.user.UserRepository;
@@ -28,23 +30,24 @@ import org.bukkit.Material;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 
+import java.util.Map;
 import java.util.function.BiConsumer;
-import java.util.function.Consumer;
+import java.util.stream.Collectors;
 
+import static ac.intave.samples.event.WindowActionEvent.Action.CLOSE;
+import static ac.intave.samples.event.WindowActionEvent.Action.INFER_OPEN;
 import static de.jpx3.intave.check.movement.physics.environment.MoveMetric.TELEPORT;
 import static de.jpx3.intave.module.linker.packet.ListenerPriority.LOWEST;
 import static de.jpx3.intave.module.linker.packet.PacketId.Client.*;
 import static de.jpx3.intave.module.linker.packet.PacketId.Client.POSITION;
 import static de.jpx3.intave.module.linker.packet.PacketId.Client.VEHICLE_MOVE;
 import static de.jpx3.intave.module.linker.packet.PacketId.Server.*;
-import static de.jpx3.intave.module.nayoro.event.WindowActionEvent.Action.CLOSE;
-import static de.jpx3.intave.module.nayoro.event.WindowActionEvent.Action.INFER_OPEN;
 
 public final class PacketEventDispatch implements PacketEventSubscriber {
-  private final BiConsumer<? super User, Consumer<EventSink>> reverseSink;
+  private final BiConsumer<? super User, ? super Event> eventEmitter;
 
-  public PacketEventDispatch(BiConsumer<? super User, Consumer<EventSink>> sinkCallback) {
-    this.reverseSink = sinkCallback;
+  public PacketEventDispatch(BiConsumer<? super User, ? super Event> eventEmitter) {
+    this.eventEmitter = eventEmitter;
   }
 
   @PacketSubscription(
@@ -55,8 +58,9 @@ public final class PacketEventDispatch implements PacketEventSubscriber {
   public void onClick(PacketEvent event) {
     Player player = event.getPlayer();
     User user = UserRepository.userOf(player);
-    ClickEvent clickEvent = ClickEvent.create();
-    reverseSink.accept(user, clickEvent::accept);
+    // The samples factory returns a shared singleton, but recording offsets are event-local.
+    ClickEvent clickEvent = new ClickEvent();
+    eventEmitter.accept(user, clickEvent);
   }
 
   @PacketSubscription(
@@ -75,7 +79,7 @@ public final class PacketEventDispatch implements PacketEventSubscriber {
       int attackerId = player.getEntityId();
       int targetId = reader.entityId();
       AttackEvent attackEvent = AttackEvent.create(attackerId, targetId);
-      reverseSink.accept(user, attackEvent::accept);
+      eventEmitter.accept(user, attackEvent);
     }
     reader.release();
   }
@@ -93,13 +97,8 @@ public final class PacketEventDispatch implements PacketEventSubscriber {
     double x = movement.positionX;
     double y = movement.positionY;
     double z = movement.positionZ;
-    double lastX = movement.lastPositionX;
-    double lastY = movement.lastPositionY;
-    double lastZ = movement.lastPositionZ;
     float yaw = movement.rotationYaw;
     float pitch = movement.rotationPitch;
-    float lastYaw = movement.lastRotationYaw;
-    float lastPitch = movement.lastRotationPitch;
     int keyStrafe = movement.keyStrafe;
     int keyForward = movement.keyForward;
 
@@ -113,26 +112,13 @@ public final class PacketEventDispatch implements PacketEventSubscriber {
     boolean recentlyTeleported = movement.ticksPast(TELEPORT) <= 3;
     boolean jumped = movement.physicsJumped;
 
-    int movementFlags = 0;
-    movementFlags |= collidedHorizontally ? 1 : 0;
-    movementFlags |= collidedVertically ? 2 : 0;
-    movementFlags |= inWater ? 4 : 0;
-    movementFlags |= inLava ? 8 : 0;
-    movementFlags |= inVehicle ? 16 : 0;
-    movementFlags |= sneaking ? 32 : 0;
-    movementFlags |= recentlyTeleported ? 64 : 0;
-    movementFlags |= jumped ? 128 : 0;
-
     PlayerMoveEvent movementEvent = PlayerMoveEvent.create(
       keyStrafe, keyForward,
-      x, y, z,
-      yaw, pitch,
-      lastX, lastY, lastZ,
-      lastYaw, lastPitch,
-      movementFlags,
-      movement.recordedMoves++ % 200 == 0
+      new Position(x, y, z), new Rotation(yaw, pitch),
+      collidedHorizontally, collidedVertically, inWater, inLava,
+      inVehicle, sneaking, recentlyTeleported, jumped
     );
-    reverseSink.accept(user, movementEvent::accept);
+    eventEmitter.accept(user, movementEvent);
   }
 
   @PacketSubscription(
@@ -158,7 +144,7 @@ public final class PacketEventDispatch implements PacketEventSubscriber {
     SlotSwitchEvent slotSwitchEvent = SlotSwitchEvent.create(
       slot, type.name(), amount
     );
-    reverseSink.accept(user, slotSwitchEvent::accept);
+    eventEmitter.accept(user, slotSwitchEvent);
   }
 
   @PacketSubscription(
@@ -173,13 +159,15 @@ public final class PacketEventDispatch implements PacketEventSubscriber {
     boolean assumeWindowOpen = user.meta().connection().assumeWindowOpen;
     if (!assumeWindowOpen) {
       user.meta().connection().assumeWindowOpen = true;
-      WindowActionEvent openEvent = WindowActionEvent.create(INFER_OPEN, user.player().getInventory().getArmorContents());
-      reverseSink.accept(user, openEvent::accept);
+      WindowActionEvent openEvent = WindowActionEvent.create(
+        INFER_OPEN, SampleTypes.items(user.player().getInventory().getArmorContents())
+      );
+      eventEmitter.accept(user, openEvent);
     }
     WindowClickEvent clickEvent = WindowClickEvent.create(
       reader.containerId(), reader.slot(), reader.clickType().ordinal(), reader.button(), reader.actionNumber()
     );
-    reverseSink.accept(user, clickEvent::accept);
+    eventEmitter.accept(user, clickEvent);
   }
 
   @PacketSubscription(
@@ -191,8 +179,10 @@ public final class PacketEventDispatch implements PacketEventSubscriber {
   public void receiveWindowClose(PacketEvent event) {
     Player player = event.getPlayer();
     User user = UserRepository.userOf(player);
-    WindowActionEvent closeEvent = WindowActionEvent.create(CLOSE, user.player().getInventory().getArmorContents());
-    reverseSink.accept(user, closeEvent::accept);
+    WindowActionEvent closeEvent = WindowActionEvent.create(
+      CLOSE, SampleTypes.items(user.player().getInventory().getArmorContents())
+    );
+    eventEmitter.accept(user, closeEvent);
     user.meta().connection().assumeWindowOpen = false;
   }
 
@@ -229,9 +219,28 @@ public final class PacketEventDispatch implements PacketEventSubscriber {
 
     // inventory
     slots += 4 * 9;
-//    System.out.println("Sent window items: " + slots);
-//    Map<Integer, ItemStack> items = reader.itemMap();
-//    WindowItemsEvent event = WindowItemsEvent.create(container, slots, items);
-//    reverseSink.accept(user, event::accept);
+    Map<Integer, ItemStack> items = reader.itemMap();
+    WindowItemsEvent event = WindowItemsEvent.create(
+      container, slots,
+      items.entrySet().stream().map(integerItemStackEntry -> new Map.Entry<Integer, Item>() {
+        @Override
+        public Integer getKey() {
+          return integerItemStackEntry.getKey();
+        }
+
+        @Override
+        public Item getValue() {
+          return SampleTypes.item(integerItemStackEntry.getValue());
+        }
+
+        @Override
+        public Item setValue(Item value) {
+          throw new UnsupportedOperationException("setValue is not supported");
+        }
+      }).collect(Collectors.toMap(
+        Map.Entry::getKey, Map.Entry::getValue
+      ))
+    );
+    eventEmitter.accept(user, event);
   }
 }

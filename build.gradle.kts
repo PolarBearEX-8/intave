@@ -15,6 +15,7 @@ import xyz.jpenilla.runpaper.task.RunServer
 
 plugins {
   java
+  jacoco
   id("com.github.gmazzo.buildconfig") version "6.0.9"
   id("net.minecrell.plugin-yml.bukkit") version "0.6.0"
   id("com.gradleup.shadow") version "9.4.1"
@@ -69,24 +70,26 @@ dependencies {
   testImplementation("net.dmulloy2:ProtocolLib:5.4.0")
   testImplementation("io.netty:netty-all:4.2.15.Final")
 
-  // random shit
+  // Loaded by Libraries.setupLibraries() when the plugin starts.
+  compileOnly("ac.intave:samples:0.0.7")
+  compileOnly("ac.intave:cloud-protocol:0.0.4") { isTransitive = false }
+  testImplementation("ac.intave:samples:0.0.7")
+  testImplementation("ac.intave:cloud-protocol:0.0.4") { isTransitive = false }
+
+  // random shit[
   compileOnly("org.jetbrains:annotations:23.1.0")
   compileOnly("it.unimi.dsi:fastutil:8.5.12")
-
-  // smile
-  compileOnly("com.github.haifengl:smile-base:3.0.1")
-  compileOnly("com.github.haifengl:smile-core:3.0.1")
-
-  // add bytedeco
-  compileOnly("org.bytedeco:openblas:0.3.23-1.5.9")
-  compileOnly("org.bytedeco:openblas-platform:0.3.23-1.5.9")
-  compileOnly("org.bytedeco:javacpp:1.5.9")
-  compileOnly("org.bytedeco:javacpp-presets:1.5.9")
 
   compileOnly("org.spigotmc:spigot-api:1.21.1-R0.1-SNAPSHOT")
 
   // bytebuddy
   compileOnly("net.bytebuddy:byte-buddy:1.18.2")
+
+  // Loaded by Libraries.setupLibraries() when the plugin starts.
+  compileOnly("org.bouncycastle:bcpkix-jdk18on:1.85")
+  compileOnly("com.github.luben:zstd-jni:1.5.7-12")
+  testImplementation("org.bouncycastle:bcpkix-jdk18on:1.85")
+  testImplementation("com.github.luben:zstd-jni:1.5.7-12")
 
   // floodgate
   compileOnly("org.geysermc.floodgate:api:2.0-SNAPSHOT")
@@ -750,5 +753,20 @@ tasks {
   test {
     useJUnitPlatform()
     failOnNoDiscoveredTests = false
+  }
+
+  jacocoTestReport {
+    dependsOn(test)
+    reports {
+      html.required.set(true)
+      xml.required.set(true)
+      csv.required.set(true)
+    }
+  }
+
+  register("testCoverage") {
+    group = "verification"
+    description = "Runs the test suite and generates a JaCoCo coverage report."
+    dependsOn(jacocoTestReport)
   }
 }
