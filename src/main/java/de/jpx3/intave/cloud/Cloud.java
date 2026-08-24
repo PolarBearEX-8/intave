@@ -27,8 +27,6 @@ import de.jpx3.intave.executor.BackgroundExecutors;
 import de.jpx3.intave.executor.Synchronizer;
 import de.jpx3.intave.executor.TaskTracker;
 import de.jpx3.intave.module.Modules;
-import de.jpx3.intave.resource.Resource;
-import de.jpx3.intave.resource.Resources;
 import de.jpx3.intave.user.User;
 import de.jpx3.intave.user.UserRepository;
 import org.bukkit.Bukkit;
@@ -37,20 +35,11 @@ import org.bukkit.entity.Player;
 
 import java.nio.ByteBuffer;
 import java.util.UUID;
-import java.util.concurrent.TimeUnit;
 import java.util.function.LongFunction;
 
 @HighOrderService
 public final class Cloud {
 	// later
-	private static final Resource INITIAL_SHARED_KEY_RESOURCE = Resources.localServiceCacheResource("cloud-initial.dat", "cloud-initial", TimeUnit.DAYS.toMillis(30));
-	private static final Resource SHARD_STORAGE_RESOURCE = Resources.fileCache("shardStorage");
-
-//	private static final ShardConnection MASTER_SHARD_CONNECTION = new ShardConnection("master", "main.shard.intave.cloud", 2024, new Token(
-//		Base64.getUrlDecoder().decode("AAABABKT-HudAj2RnjKdCCcBTs3wWn5fVlOMSaexNfQjlDYjq8TK016swow9U36oYyz53ufgYv6PQPZo_2r5oQep04EedDyqUR3SrSyRXGBTEGcZRO79AOF7_7yF_iZtSliZhbWnJK7PDoIS3QzY6LW35A9G-IPlNM5GkHqR2ysJ8cP2635r9fVc0xU0iLKDXs6MPZdAPVpAVzdCnbezAyY3dQxSzufwWhANkrGsel-qxfZQSh7QVYsCt50-B7u8w2mwO9LbNvDK1zMyaJOlwrD6ztxEYwjmWv8y4LQbxEEfPaiTVB8X6tepDhLrmSO3Ql7QVsWyJS_Iwt7VSNYPaN56ptCF3FoKJw-d7ZGsaEbSUXk8AAAAUBeKwtkFQOkOJulQ7hn4ZtfwgFitc5nckFwfnXFGsYMgYdQyI7Yr1QyZbh8ZtzxAd-w0hX65ch9RnghmXixN6AzhHjrCzOqkD1N1swuIUvDhAAAAIL1zcMGcxnBgDvC-7hcFkDIm8WxwaWSnu2LfU4msGtES"),
-//		System.currentTimeMillis()
-//	));
-
 	private volatile Session session;
 	private volatile int reconnectAttempts = 0;
 
