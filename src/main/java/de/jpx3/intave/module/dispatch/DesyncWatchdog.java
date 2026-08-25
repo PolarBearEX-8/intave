@@ -1,3 +1,14 @@
+/*
+ * Copyright 2026 Intave
+ *
+ * This software is licensed under the PolyForm Perimeter License 1.0.0.
+ * You may use this software for any purpose, except for providing to
+ * others any product that competes with the software.
+ *
+ * A copy of the license is available at:
+ *   https://polyformproject.org/licenses/perimeter/1.0.0/
+ */
+
 package de.jpx3.intave.module.dispatch;
 
 import de.jpx3.intave.IntaveLogger;
@@ -16,6 +27,7 @@ import de.jpx3.intave.user.MessageChannel;
 import de.jpx3.intave.user.User;
 import de.jpx3.intave.user.UserLocal;
 import de.jpx3.intave.user.UserRepository;
+import de.jpx3.intave.user.meta.MovementMetadata;
 import org.bukkit.Bukkit;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
@@ -34,7 +46,7 @@ public final class DesyncWatchdog extends Module {
 
   @Override
   public void enable() {
-    Bukkit.getScheduler().scheduleAsyncRepeatingTask(plugin, () ->
+    Bukkit.getScheduler().runTaskTimer(plugin, () ->
       UserRepository.applyOnAll(this::performDesyncCheck), 20, 20);
   }
 
@@ -48,8 +60,13 @@ public final class DesyncWatchdog extends Module {
       return;
     }
 
-    PositionBundle positionBundle = positionBundleOf(user);
     AtomicInteger violationCounter = this.violationCounter.get(user);
+    if (teleportPending(user)) {
+      violationCounter.set(0);
+      return;
+    }
+
+    PositionBundle positionBundle = positionBundleOf(user);
     if (positionBundle.anyDesynced()) {
       int currentVL = violationCounter.incrementAndGet();
       if (currentVL > 1) {
@@ -88,6 +105,14 @@ public final class DesyncWatchdog extends Module {
       violationCounter.set(0);
     }
     userLocalDesyncHistory.get(user).add(positionBundle);
+  }
+
+  private boolean teleportPending(User user) {
+    return teleportPending(user.meta().movement());
+  }
+
+  static boolean teleportPending(MovementMetadata movement) {
+    return movement.awaitTeleport || movement.awaitOutgoingTeleport;
   }
 
   public static class PositionBundle {

@@ -124,10 +124,7 @@ public final class MovementDispatcher extends Module {
     Location toLocation = event.getTo();
     double teleportDistance = toLocation.getWorld() != player.getWorld() ? Double.MAX_VALUE : toLocation.distance(fromLocation);
     if (toLocation.getWorld() != player.getWorld() || teleportDistance > 8) {
-      Location fixed = fixLocation(user, toLocation);
-      Synchronizer.synchronize(() -> {
-        player.teleport(fixed, PlayerTeleportEvent.TeleportCause.NETHER_PORTAL);
-      });
+      event.setTo(fixLocation(user, toLocation));
     }
     MovementMetadata movementData = user.meta().movement();
     movementData.artificialFallDistance = 0;
@@ -737,7 +734,10 @@ public final class MovementDispatcher extends Module {
     User user = UserRepository.userOf(player);
     MovementMetadata movementData = user.meta().movement();
     PacketContainer packet = event.getPacket();
-    if (MinecraftVersions.VER1_21_3.atOrAbove() && user.meta().protocol().sendsInputs()) {
+    if (MinecraftVersions.VER1_21_2.atOrAbove()) {
+      if (!user.meta().protocol().sendsInputs()) {
+        return;
+      }
       StructureModifier<Boolean> inputBooleans = packet.getStructures().read(0).getBooleans();
       movementData.lastInput = movementData.input;
       movementData.input = new Input(
