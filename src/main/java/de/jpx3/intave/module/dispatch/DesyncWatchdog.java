@@ -20,6 +20,7 @@ import de.jpx3.intave.executor.Synchronizer;
 import de.jpx3.intave.math.MathHelper;
 import de.jpx3.intave.module.Module;
 import de.jpx3.intave.module.Modules;
+import de.jpx3.intave.module.tracker.player.PacketLogging;
 import de.jpx3.intave.module.violation.Violation;
 import de.jpx3.intave.share.HistoryWindow;
 import de.jpx3.intave.share.Position;
@@ -97,7 +98,17 @@ public final class DesyncWatchdog extends Module {
             if (user.receives(MessageChannel.DEBUG_TELEPORT)) {
               player.sendMessage(IntavePlugin.prefix() + "You were instructed to teleport to " + MathHelper.formatPosition(location) + " due to desync.");
             }
-            player.teleport(location);
+            PacketLogging logging = Modules.tracker().packetLogging();
+            logging.logSystemMessage(user, () ->
+              "TELEPORT ACTION source=DESYNC_WATCHDOG target=" + MathHelper.formatPosition(location) +
+                " verified=" + positionBundle.intaveAcceptedPosition() +
+                " nocheck=" + positionBundle.prefilteredPendingPosition() +
+                " server=" + positionBundle.serverPosition()
+            );
+            boolean teleported = player.teleport(location);
+            logging.logSystemMessage(user, () ->
+              "TELEPORT ACTION RESULT source=DESYNC_WATCHDOG accepted=" + teleported
+            );
           });
         }
       }

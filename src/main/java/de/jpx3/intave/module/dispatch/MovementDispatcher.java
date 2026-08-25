@@ -116,15 +116,33 @@ public final class MovementDispatcher extends Module {
   public void receiveExternalTeleport(PlayerTeleportEvent event) {
     Player player = event.getPlayer();
     User user = UserRepository.userOf(player);
+    PacketLogging logging = Modules.tracker().packetLogging();
     PlayerTeleportEvent.TeleportCause cause = event.getCause();
     if (cause == PlayerTeleportEvent.TeleportCause.NETHER_PORTAL || event.isCancelled()) {
+      logging.logSystemMessage(user, () ->
+        "TELEPORT CORRECTION SKIPPED id=" + Integer.toHexString(System.identityHashCode(event)) +
+          " cause=" + cause + " cancelled=" + event.isCancelled()
+      );
       return;
     }
     Location fromLocation = event.getFrom();
     Location toLocation = event.getTo();
     double teleportDistance = toLocation.getWorld() != player.getWorld() ? Double.MAX_VALUE : toLocation.distance(fromLocation);
     if (toLocation.getWorld() != player.getWorld() || teleportDistance > 8) {
-      event.setTo(fixLocation(user, toLocation));
+      Location fixedLocation = fixLocation(user, toLocation);
+      event.setTo(fixedLocation);
+      logging.logSystemMessage(user, () ->
+        "TELEPORT CORRECTION APPLIED id=" + Integer.toHexString(System.identityHashCode(event)) +
+          " distance=" + teleportDistance +
+          " requested=" + MathHelper.formatPosition(toLocation) +
+          " corrected=" + MathHelper.formatPosition(fixedLocation)
+      );
+    } else {
+      logging.logSystemMessage(user, () ->
+        "TELEPORT CORRECTION NOT_REQUIRED id=" + Integer.toHexString(System.identityHashCode(event)) +
+          " distance=" + teleportDistance +
+          " requested=" + MathHelper.formatPosition(toLocation)
+      );
     }
     MovementMetadata movementData = user.meta().movement();
     movementData.artificialFallDistance = 0;
@@ -173,6 +191,9 @@ public final class MovementDispatcher extends Module {
       location.getWorld(), location.getBlockX(), location.getBlockZ()
     );
     if (!inLoadedChunk) {
+      Modules.tracker().packetLogging().logSystemMessage(user, () ->
+        "TELEPORT LOCATION FIX skipped=unloaded_chunk location=" + MathHelper.formatPosition(location)
+      );
       return location;
     }
 
@@ -180,11 +201,15 @@ public final class MovementDispatcher extends Module {
     int baseShifts = BASE_SHIFTS;
     Location fixedLocation = location.clone();
     World world = location.getWorld();
+    int collisionShifts = 0;
+    int clearanceShifts = 0;
 
     // A: move out of existing blocks
     BoundingBox bb = BoundingBox.fromPosition(user, movement, fixedLocation);
+    boolean initiallyColliding = Collision.unsafePresent(world, user.player(), bb);
     while (fixedLocation.getY() < WorldHeight.UPPER_WORLD_LIMIT && baseShifts-- > 0 && Collision.unsafePresent(world, user.player(), bb) && Collision.unsafeNonePresent(world, user.player(), bb.offset(0, BASE_SHIFTS * 0.1, 0))) {
       fixedLocation.add(0, 0.101, 0);
+      collisionShifts++;
       bb = BoundingBox.fromPosition(user, movement, fixedLocation).grow(0.1);
     }
 
@@ -193,8 +218,20 @@ public final class MovementDispatcher extends Module {
     bb = BoundingBox.fromPosition(user, movement, fixedLocation);
     while (fixedLocation.getY() < WorldHeight.UPPER_WORLD_LIMIT && baseShifts-- > 0 && Collision.unsafeNonePresent(world, user.player(), bb)) {
       fixedLocation.add(0, 0.101, 0);
+      clearanceShifts++;
       bb = BoundingBox.fromPosition(user, movement, fixedLocation).grow(0.1).expand(0.5, 0.45, 0.5);
     }
+    int finalCollisionShifts = collisionShifts;
+    int finalClearanceShifts = clearanceShifts;
+    boolean finallyColliding = Collision.unsafePresent(world, user.player(), BoundingBox.fromPosition(user, movement, fixedLocation));
+    Modules.tracker().packetLogging().logSystemMessage(user, () ->
+      "TELEPORT LOCATION FIX loaded=true initially_colliding=" + initiallyColliding +
+        " collision_shifts=" + finalCollisionShifts +
+        " clearance_shifts=" + finalClearanceShifts +
+        " finally_colliding=" + finallyColliding +
+        " from=" + MathHelper.formatPosition(location) +
+        " to=" + MathHelper.formatPosition(fixedLocation)
+    );
     return fixedLocation;
   }
 

@@ -581,7 +581,14 @@ public final class DiagnosticsStage extends CommandStage {
       } while (Collision.present(user, movement, playerBox.move(0, 0, moveZ)) && attempts-- > 0);
       if (attempts <= 0) moveZ = 0;
       if (attempts <= 0) moveY = 0;
-      player.teleport(player.getLocation().clone().add(moveX, moveY, moveZ));
+      Location target = player.getLocation().clone().add(moveX, moveY, moveZ);
+      Modules.tracker().packetLogging().logSystemMessage(user, () ->
+        "TELEPORT ACTION source=DIAGNOSTICS_TELEPORT_SPAM target=" + target
+      );
+      boolean teleported = player.teleport(target);
+      Modules.tracker().packetLogging().logSystemMessage(user, () ->
+        "TELEPORT ACTION RESULT source=DIAGNOSTICS_TELEPORT_SPAM accepted=" + teleported
+      );
 
       if (user.receives(MessageChannel.DEBUG_TELEPORT)) {
         player.sendMessage(IntavePlugin.prefix() + "Teleport to " + player.getLocation().getBlockX() + " " + player.getLocation().getBlockY() + " " + player.getLocation().getBlockZ() + " " + " as " + ChatColor.RED + " it was command-requested");

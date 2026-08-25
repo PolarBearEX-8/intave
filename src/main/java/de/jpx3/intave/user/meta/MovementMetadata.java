@@ -34,6 +34,7 @@ import de.jpx3.intave.check.world.interaction.BlockTrustChain;
 import de.jpx3.intave.executor.RateLimiter;
 import de.jpx3.intave.executor.Synchronizer;
 import de.jpx3.intave.math.MathHelper;
+import de.jpx3.intave.module.Modules;
 import de.jpx3.intave.module.tracker.entity.Entity;
 import de.jpx3.intave.packet.Relative;
 import de.jpx3.intave.player.Effects;
@@ -1767,7 +1768,14 @@ public final class MovementMetadata implements SimulationEnvironment {
     if (positionReset) {
       Synchronizer.synchronize(() -> {
         // player.getLocation() is assumed to be correct
-        player.teleport(player.getLocation());
+        Location target = player.getLocation();
+        Modules.tracker().packetLogging().logSystemMessage(user, () ->
+          "TELEPORT ACTION source=VEHICLE_DISMOUNT reason=" + reason + " target=" + target
+        );
+        boolean teleported = player.teleport(target);
+        Modules.tracker().packetLogging().logSystemMessage(user, () ->
+          "TELEPORT ACTION RESULT source=VEHICLE_DISMOUNT accepted=" + teleported
+        );
         if (user.receives(MessageChannel.DEBUG_TELEPORT)) {
           player.sendMessage(IntavePlugin.prefix() + "Teleport to " + player.getLocation().getBlockX() + " " + player.getLocation().getBlockY() + " " + player.getLocation().getBlockZ() + " " + " because " + ChatColor.RED + " you dismounted a vehicle");
         }

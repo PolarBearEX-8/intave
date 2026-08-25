@@ -433,6 +433,10 @@ public final class Physics extends Check {
     double receivedPositionX = movementData.positionX();
     double receivedPositionY = movementData.positionY();
     double receivedPositionZ = movementData.positionZ();
+    boolean clientChunkLoaded = meta.connection().hasClientChunk(
+      floor(receivedPositionX) >> 4,
+      floor(receivedPositionZ) >> 4
+    );
     double positionX = movementData.verifiedLastPositionX();
     double positionY = movementData.verifiedLastPositionY();
     double positionZ = movementData.verifiedLastPositionZ();
@@ -503,7 +507,8 @@ public final class Physics extends Check {
 
     boolean velocityDetected = false;
 
-    boolean checkVelocity = !skipVLCalculation
+    boolean checkVelocity = clientChunkLoaded
+      && !skipVLCalculation
       && movementData.ticksPast(IN_WEB) > 5
       && !movementData.inWater()
       && !movementData.collidedWithBoat();
@@ -624,7 +629,7 @@ public final class Physics extends Check {
       violationLevelIncrease = 0;
     }
 
-    if (violationLevelData.physicsInsignificantBufferVL < 3 &&
+    if (clientChunkLoaded && violationLevelData.physicsInsignificantBufferVL < 3 &&
       violationLevelData.physicsVL + violationLevelIncrease > 50 &&
       violationLevelIncrease > 0 && !movementData.inWeb() && !movementData.inWater() &&
       distance > 0.001
@@ -723,21 +728,23 @@ public final class Physics extends Check {
       }
       violationLevelIncrease = Math.min(200.0, violationLevelIncrease);
       violationLevelIncrease = Math.max(1, violationLevelIncrease);
-      violationLevelData.physicsVL = MathHelper.minmax(0, violationLevelData.physicsVL + violationLevelIncrease, 200);
-      violationLevelData.physicsInvalidMovementsInRow += (distance < 0.01 ? 0.25 : (distance < 0.05 ? 0.5 : 1));
-      if (
-        violationLevelData.physicsOffset > latantDistance
-          && distance > 0.001
-          && !spectator
-          && violationLevelData.physicsVL > 50
-      ) {
-        if (physicsReport == null) {
-          physicsReport = new PhysicsReport(user);
+      if (clientChunkLoaded) {
+        violationLevelData.physicsVL = MathHelper.minmax(0, violationLevelData.physicsVL + violationLevelIncrease, 200);
+        violationLevelData.physicsInvalidMovementsInRow += (distance < 0.01 ? 0.25 : (distance < 0.05 ? 0.5 : 1));
+        if (
+          violationLevelData.physicsOffset > latantDistance
+            && distance > 0.001
+            && !spectator
+            && violationLevelData.physicsVL > 50
+        ) {
+          if (physicsReport == null) {
+            physicsReport = new PhysicsReport(user);
+          }
         }
-      }
-      if (violationLevelData.physicsVL > 20) {
-        if (!IntaveControl.IGNORE_CACHE_REFRESH_ON_SIMULATION_FAULT) {
-          blockStateAccess.invalidateAll();
+        if (violationLevelData.physicsVL > 20) {
+          if (!IntaveControl.IGNORE_CACHE_REFRESH_ON_SIMULATION_FAULT) {
+            blockStateAccess.invalidateAll();
+          }
         }
       }
     } else {
@@ -759,12 +766,21 @@ public final class Physics extends Check {
     // santiy checks
     performMovementSanityChecks(user, receivedOffsetMotionX, receivedOffsetMotionY, receivedOffsetMotionZ);
 
-    if (offsetRequirement && !spectator && violationLevelData.physicsVL > 50 && violationLevelIncrease > 0) {
+    boolean physicsFlag = offsetRequirement
+      && !spectator
+      && violationLevelIncrease > 0
+      && (violationLevelData.physicsVL > 50 || !clientChunkLoaded);
+    if (physicsFlag) {
       String received = formatPosition(receivedOffsetMotionX, receivedOffsetMotionY, receivedOffsetMotionZ);
       String expected = formatPosition(predictedOffsetX, predictedOffsetY, predictedOffsetZ);
       String actual = formatPosition(actualMotion.motionX, actualMotion.motionY, actualMotion.motionZ);
 
 //      user.sendReport(physicsReport == null ? new PhysicsReport(user) : physicsReport);
+
+      // Must be here to trigger the flag
+      if (!clientChunkLoaded) {
+        violationLevelIncrease = 0;
+      }
 
       String message = "moved incorrectly";
       String details = "Δ" + formatDouble(distance, 6)
@@ -789,6 +805,7 @@ public final class Physics extends Check {
       }
       granularDebugs.put("insig", formatDouble(violationLevelData.physicsInsignificantBufferVL, 1));
       granularDebugs.put("acc/off", formatDouble(violationLevelData.physicsOffset, 2));
+      granularDebugs.put("client_chunk", clientChunkLoaded ? "loaded" : "unloaded");
       granularDebugs.put("s/c v", MinecraftVersion.current().getVersion() + " / " + user.protocolVersion());
       BlockShape collShape = Collision.shape(user, movementData, currentBoundingBox);
       granularDebugs.put("coll", collShape.toString());
@@ -906,6 +923,10 @@ public final class Physics extends Check {
 
       // Apply manual setback override when the deviation is greater than a certain amount of blocks
       if (distance > manualOverrideDistance) {
+        setback = true;
+      }
+
+      if (!clientChunkLoaded) {
         setback = true;
       }
 
