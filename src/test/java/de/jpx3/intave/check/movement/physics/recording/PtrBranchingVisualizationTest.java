@@ -60,23 +60,17 @@ final class PtrBranchingVisualizationTest {
 
 	@TestFactory
 	Stream<DynamicTest> writesInteractiveBranchTracesForAllRecordings() throws IOException {
-		return MovementRecordingPhysicsTests.findMovementRecordings().stream()
-			.map(path -> {
-				String resource = MovementRecordingPhysicsTests.resourcePathOf(path);
-				return dynamicTest(resource, () -> writeInteractiveBranchTrace(resource));
-			});
+		return MovementRecordingPhysicsTests.findMovementRecordings().stream().map(path -> {
+			String resource = MovementRecordingPhysicsTests.resourcePathOf(path);
+			return dynamicTest(resource, () -> writeInteractiveBranchTrace(resource));
+		});
 	}
 
 	private static void writeInteractiveBranchTrace(String resource) throws IOException {
-		MovementRecording recording = MovementRecording.loadFrom(
-			Resources.resourceFromJarOrTestBuild(resource)
-		);
+		MovementRecording recording = MovementRecording.loadFrom(Resources.resourceFromJarOrTestBuild(resource));
 		List<TickTrace> ticks = new ArrayList<>();
 		try {
-			MovementRecordingPhysicsTests.processRecordingResource(
-				resource,
-				(tick, selected, actualMotion) -> ticks.add(traceTick(tick, selected, actualMotion))
-			);
+			MovementRecordingPhysicsTests.processRecordingResource(resource, (tick, selected, actualMotion) -> ticks.add(traceTick(tick, selected, actualMotion)));
 		} catch (AssertionError failure) {
 			if (!ticks.isEmpty()) {
 				int failingTick = ticks.getLast().tick();
@@ -90,18 +84,8 @@ final class PtrBranchingVisualizationTest {
 		System.out.println("PTR branching visualization: " + output.toAbsolutePath());
 	}
 
-	static Path writeFailureReport(
-		String resource,
-		MovementRecording recording,
-		int tick,
-		Simulation selected,
-		Motion actualMotion
-	) throws IOException {
-		return writeReport(
-			resource,
-			recording,
-			List.of(traceTick(tick, selected, actualMotion))
-		);
+	static Path writeFailureReport(String resource, MovementRecording recording, int tick, Simulation selected, Motion actualMotion) throws IOException {
+		return writeReport(resource, recording, List.of(traceTick(tick, selected, actualMotion)));
 	}
 
 	static String printReportLink(Path output, int tick) {
@@ -114,54 +98,32 @@ final class PtrBranchingVisualizationTest {
 		return output.toAbsolutePath().normalize().toUri() + "?tick=" + tick;
 	}
 
-	private static Path writeReport(
-		String resource,
-		MovementRecording recording,
-		List<TickTrace> ticks
-	) throws IOException {
+	private static Path writeReport(String resource, MovementRecording recording, List<TickTrace> ticks) throws IOException {
 		Path output = outputPath(resource);
 		Files.createDirectories(output.getParent());
-		Files.writeString(
-			output,
-			HTML
-				.replace("__TRACE_DATA__", toJson(ticks))
-				.replace("__RECORDING__", resource)
-				.replace("__RECORDING_NAME__", recordingName(resource))
-				.replace("__CLIENT_PROTOCOL__", Integer.toString(recording.clientProtocolVersion()))
-				.replace("__SERVER_VERSION__", recording.serverVersion().getVersion())
-				.replace("__ASSET_VERSION__", recording.serverVersion().getVersion()),
-			StandardCharsets.UTF_8
-		);
+		Files.writeString(output, HTML.replace("__TRACE_DATA__", toJson(ticks)).replace("__RECORDING__", resource).replace("__RECORDING_NAME__", recordingName(resource)).replace("__CLIENT_PROTOCOL__", Integer.toString(recording.clientProtocolVersion())).replace("__SERVER_VERSION__", recording.serverVersion().getVersion()).replace("__ASSET_VERSION__", recording.serverVersion().getVersion()), StandardCharsets.UTF_8);
 		return output;
 	}
 
 	@Test
 	void reportLinkIncludesExactTick() {
-		assertTrue(reportUri(Path.of("build", "reports", "ptr-branching", "sample.html"), 37)
-			.endsWith("sample.html?tick=37"));
+		assertTrue(reportUri(Path.of("build", "reports", "ptr-branching", "sample.html"), 37).endsWith("sample.html?tick=37"));
 	}
 
 	private static Path outputPath(String resource) {
 		if (!resource.startsWith(RECORDING_ROOT) || !resource.endsWith(".ptr")) {
 			throw new IllegalArgumentException("Unexpected PTR resource path: " + resource);
 		}
-		String relative = resource.substring(
-			RECORDING_ROOT.length(), resource.length() - ".ptr".length()
-		) + ".html";
+		String relative = resource.substring(RECORDING_ROOT.length(), resource.length() - ".ptr".length()) + ".html";
 		return OUTPUT_ROOT.resolve(Path.of(relative));
 	}
 
 	private static String recordingName(String resource) {
 		int start = resource.lastIndexOf('/') + 1;
-		return resource.substring(start, resource.length() - ".ptr".length())
-			.replace('_', ' ');
+		return resource.substring(start, resource.length() - ".ptr".length()).replace('_', ' ');
 	}
 
-	private static TickTrace traceTick(
-		int tick,
-		Simulation selected,
-		Motion actualMotion
-	) {
+	private static TickTrace traceTick(int tick, Simulation selected, Motion actualMotion) {
 		SimulationEnvironment selectedEnvironment = selected.environment();
 		long selectedFrequencyKey = selected.branchFrequencyKey();
 		Motion selectedPredictedMotion = selected.offsetMotion().copy();
@@ -171,9 +133,7 @@ final class PtrBranchingVisualizationTest {
 		User user = selectedEnvironment.user();
 		SimulationEnvironment rootEnvironment = user.meta().movement().immutableView();
 		Simulator simulator = rootEnvironment.simulator();
-		MovementSearchInput input = MovementSearchInput.forTick(
-			user, simulator, rootEnvironment, false
-		);
+		MovementSearchInput input = MovementSearchInput.forTick(user, simulator, rootEnvironment, false);
 
 		Set<MovementSearchBranch> current = new HashSet<>();
 		MovementSearchBranch blank = MovementSearchBranch.blank(input);
@@ -181,32 +141,25 @@ final class PtrBranchingVisualizationTest {
 		List<MutableStage> mutableStages = new ArrayList<>();
 		mutableStages.add(MutableStage.start(blank));
 
-		for (SearchBrancher<MovementSearchInput, MovementSearchBranch> brancher
-			: MovementSearchBranchers.tick()) {
+		for (SearchBrancher<MovementSearchInput, MovementSearchBranch> brancher : MovementSearchBranchers.tick()) {
 			Set<MovementSearchBranch> next = new HashSet<>();
-			MutableStage stage = new MutableStage(
-				friendlyName(brancher), current.size()
-			);
+			MutableStage stage = new MutableStage(friendlyName(brancher), current.size());
 			for (MovementSearchBranch parent : current) {
 				int attemptsBefore = stage.attemptedChildren;
-				Collection<MovementSearchBranch> recordingOutput =
-					new RecordingOutput(next, parent, stage);
+				Collection<MovementSearchBranch> recordingOutput = new RecordingOutput(next, parent, stage);
 				brancher.branch(input, parent, recordingOutput);
 				int fanOut = stage.attemptedChildren - attemptsBefore;
 				stage.fanOut.merge(fanOut, 1, Integer::sum);
 			}
 			if (next.isEmpty()) {
-				throw new IllegalStateException(
-					brancher.getClass().getSimpleName() + " produced no branches at tick " + tick
-				);
+				throw new IllegalStateException(brancher.getClass().getSimpleName() + " produced no branches at tick " + tick);
 			}
 			stage.captureOutputs(next);
 			mutableStages.add(stage);
 			current = next;
 		}
 
-		boolean winnerIsInFirstLayer = selectedSearchDepth == 0 && current.stream()
-			.anyMatch(branch -> branch.frequencyKey() == selectedFrequencyKey);
+		boolean winnerIsInFirstLayer = selectedSearchDepth == 0 && current.stream().anyMatch(branch -> branch.frequencyKey() == selectedFrequencyKey);
 		if (winnerIsInFirstLayer) {
 			long winnerAtStage = selectedFrequencyKey;
 			for (int stageIndex = mutableStages.size() - 1; stageIndex > 0; stageIndex--) {
@@ -217,92 +170,29 @@ final class PtrBranchingVisualizationTest {
 			mutableStages.get(0).winnerFrequencyKey = blank.frequencyKey();
 		}
 
-		List<StageTrace> stages = mutableStages.stream()
-			.map(MutableStage::freeze)
-			.toList();
+		List<StageTrace> stages = mutableStages.stream().map(MutableStage::freeze).toList();
 		EnvironmentTrace environment = captureEnvironment(user, rootEnvironment);
-		List<BranchTrace> branches = simulateBranches(
-			user,
-			rootEnvironment,
-			simulator,
-			current,
-			rootEnvironment.position(),
-			selectedFrequencyKey,
-			winnerIsInFirstLayer
-		);
-		MultiTickTrace multiTick = traceMultiTickSearch(
-			user,
-			rootEnvironment,
-			simulator,
-			selected,
-			current
-		);
+		List<BranchTrace> branches = simulateBranches(user, rootEnvironment, simulator, current, rootEnvironment.position(), selectedFrequencyKey, winnerIsInFirstLayer);
+		MultiTickTrace multiTick = traceMultiTickSearch(user, rootEnvironment, simulator, selected, current);
 		double loss = selected.positionDifference(rootEnvironment.position());
-		return new TickTrace(
-			tick,
-			loss,
-			selectedSimulationCount,
-			selectedSearchDepth,
-			current.size(),
-			winnerIsInFirstLayer,
-			selectedConfiguration,
-			formatMotion(selectedPredictedMotion),
-			formatMotion(actualMotion),
-			actualMotion.motionX(),
-			actualMotion.motionY(),
-			actualMotion.motionZ(),
-			stages,
-			branches,
-			environment,
-			multiTick
-		);
+		return new TickTrace(tick, loss, selectedSimulationCount, selectedSearchDepth, current.size(), winnerIsInFirstLayer, selectedConfiguration, formatMotion(selectedPredictedMotion), formatMotion(actualMotion), actualMotion.motionX(), actualMotion.motionY(), actualMotion.motionZ(), stages, branches, environment, multiTick);
 	}
 
-	private static List<BranchTrace> simulateBranches(
-		User user,
-		SimulationEnvironment rootEnvironment,
-		Simulator simulator,
-		Set<MovementSearchBranch> branches,
-		Position targetPosition,
-		long selectedFrequencyKey,
-		boolean winnerIsInFirstLayer
-	) {
+	private static List<BranchTrace> simulateBranches(User user, SimulationEnvironment rootEnvironment, Simulator simulator, Set<MovementSearchBranch> branches, Position targetPosition, long selectedFrequencyKey, boolean winnerIsInFirstLayer) {
 		List<BranchTrace> results = new ArrayList<>(branches.size());
 		for (MovementSearchBranch branch : branches) {
 			SimulationEnvironment branchEnvironment = branch.modifiedMutableView(rootEnvironment);
-			Simulation simulation = simulator.simulateTick(
-				user,
-				branchEnvironment.mutableBaseMotionCopy(),
-				branchEnvironment.immutableView(),
-				branch.moveConfig()
-			);
+			Simulation simulation = simulator.simulateTick(user, branchEnvironment.mutableBaseMotionCopy(), branchEnvironment.immutableView(), branch.moveConfig());
 			Motion predicted = simulation.offsetMotion().copy();
 			double loss = simulation.positionDifference(targetPosition);
-			results.add(new BranchTrace(
-				shortKey(branch.frequencyKey()),
-				formatSampleConfiguration(branch.moveConfig()),
-				loss,
-				branch.canFinishExplicitTick(),
-				winnerIsInFirstLayer && branch.frequencyKey() == selectedFrequencyKey,
-				predicted.motionX(),
-				predicted.motionY(),
-				predicted.motionZ()
-			));
+			results.add(new BranchTrace(shortKey(branch.frequencyKey()), formatSampleConfiguration(branch.moveConfig()), loss, branch.canFinishExplicitTick(), winnerIsInFirstLayer && branch.frequencyKey() == selectedFrequencyKey, predicted.motionX(), predicted.motionY(), predicted.motionZ()));
 			simulation.expire();
 		}
-		results.sort(Comparator
-			.comparingDouble(BranchTrace::loss)
-			.thenComparing(BranchTrace::key));
+		results.sort(Comparator.comparingDouble(BranchTrace::loss).thenComparing(BranchTrace::key));
 		return results;
 	}
 
-	private static MultiTickTrace traceMultiTickSearch(
-		User user,
-		SimulationEnvironment rootEnvironment,
-		Simulator rootSimulator,
-		Simulation selected,
-		Set<MovementSearchBranch> firstTickBranches
-	) {
+	private static MultiTickTrace traceMultiTickSearch(User user, SimulationEnvironment rootEnvironment, Simulator rootSimulator, Simulation selected, Set<MovementSearchBranch> firstTickBranches) {
 		int selectedDepth = Math.max(0, Math.min(2, selected.searchDepth()));
 		Position startPosition = rootEnvironment.verifiedLastPosition();
 		Position targetPosition = rootEnvironment.position();
@@ -316,40 +206,18 @@ final class PtrBranchingVisualizationTest {
 		Set<Integer> expandedIds = new HashSet<>();
 		int[] nextCandidateId = {0};
 		int selectedCandidateId = -1;
-		List<SearchParent> parents = List.of(new SearchParent(
-			rootEnvironment,
-			rootSimulator,
-			List.of(),
-			firstTickBranches,
-			-1
-		));
+		List<SearchParent> parents = List.of(new SearchParent(rootEnvironment, rootSimulator, List.of(), firstTickBranches, -1));
 
 		for (int depth = 0; depth <= THREE_TICK_SEARCH_LAST_DEPTH && !parents.isEmpty(); depth++) {
 			MutableMultiTickLayer layer = new MutableMultiTickLayer(depth);
 			List<SearchParent> nextParents = new ArrayList<>();
 			for (SearchParent parent : parents) {
-				Set<MovementSearchBranch> branches = parent.branches() == null
-					? searchTickBranches(user, parent.environment(), parent.simulator())
-					: parent.branches();
-				List<CandidatePath> candidates = simulateLayerCandidates(
-					user,
-					parent,
-					branches,
-					depth,
-					startPosition,
-					targetPosition,
-					lastReportedPosition,
-					flyingLimit,
-					parent.candidateId(),
-					nextCandidateId
-				);
+				Set<MovementSearchBranch> branches = parent.branches() == null ? searchTickBranches(user, parent.environment(), parent.simulator()) : parent.branches();
+				List<CandidatePath> candidates = simulateLayerCandidates(user, parent, branches, depth, startPosition, targetPosition, lastReportedPosition, flyingLimit, parent.candidateId(), nextCandidateId);
 				allCandidates.addAll(candidates);
 				layer.capture(candidates, selectedDepth == depth ? selected : null);
 				if (depth == selectedDepth) {
-					CandidatePath winner = candidates.stream()
-						.filter(candidate -> sameSimulation(candidate.simulation(), selected))
-						.findFirst()
-						.orElse(null);
+					CandidatePath winner = candidates.stream().filter(candidate -> sameSimulation(candidate.simulation(), selected)).findFirst().orElse(null);
 					if (winner != null) {
 						selectedPath = winner.steps();
 						selectedCandidateId = winner.id();
@@ -365,31 +233,16 @@ final class PtrBranchingVisualizationTest {
 				for (CandidatePath candidate : retention.retained()) {
 					retainedIds.add(candidate.id());
 					expandedIds.add(candidate.id());
-					SimulationEnvironment nextEnvironment = candidate.simulation()
-						.environment().mutableView();
-					Simulator nextSimulator = parent.simulator().simulateAround(
-						user,
-						nextEnvironment,
-						candidate.simulation(),
-						targetPosition,
-						rootEnvironment.rotation()
-					);
-					nextParents.add(new SearchParent(
-						nextEnvironment,
-						nextSimulator,
-						candidate.steps(),
-						null,
-						candidate.id()
-					));
+					SimulationEnvironment nextEnvironment = candidate.simulation().environment().mutableView();
+					Simulator nextSimulator = parent.simulator().simulateAround(user, nextEnvironment, candidate.simulation(), targetPosition, rootEnvironment.rotation());
+					nextParents.add(new SearchParent(nextEnvironment, nextSimulator, candidate.steps(), null, candidate.id()));
 				}
 			}
 			layers.add(layer.freeze());
 			parents = nextParents;
 		}
 		if (selectedDepth > 0 && selectedPath.isEmpty()) {
-			throw new IllegalStateException(
-				"Unable to reconstruct selected multi-tick path at depth " + selectedDepth
-			);
+			throw new IllegalStateException("Unable to reconstruct selected multi-tick path at depth " + selectedDepth);
 		}
 		Set<Integer> productionPathIds = new HashSet<>();
 		Map<Integer, CandidatePath> candidatesById = new HashMap<>();
@@ -402,110 +255,45 @@ final class PtrBranchingVisualizationTest {
 			candidateId = candidate == null ? -1 : candidate.parentId();
 		}
 		int selectedNodeId = selectedCandidateId;
-		List<MultiTickCandidateTrace> candidateTree = allCandidates.stream()
-			.map(candidate -> candidate.freeze(
-				uniqueEligibleIds.contains(candidate.id()),
-				retainedIds.contains(candidate.id()),
-				expandedIds.contains(candidate.id()),
-				productionPathIds.contains(candidate.id()),
-				candidate.id() == selectedNodeId
-			))
-			.toList();
+		List<MultiTickCandidateTrace> candidateTree = allCandidates.stream().map(candidate -> candidate.freeze(uniqueEligibleIds.contains(candidate.id()), retainedIds.contains(candidate.id()), expandedIds.contains(candidate.id()), productionPathIds.contains(candidate.id()), candidate.id() == selectedNodeId)).toList();
 
-		return new MultiTickTrace(
-			selectedDepth,
-			selected.simulationCount(),
-			flyingLimit,
-			!selectedPath.isEmpty(),
-			layers,
-			selectedPath,
-			candidateTree
-		);
+		return new MultiTickTrace(selectedDepth, selected.simulationCount(), flyingLimit, !selectedPath.isEmpty(), layers, selectedPath, candidateTree);
 	}
 
-	private static Set<MovementSearchBranch> searchTickBranches(
-		User user,
-		SimulationEnvironment environment,
-		Simulator simulator
-	) {
-		MovementSearchInput input = MovementSearchInput.forTick(
-			user, simulator, environment.immutableView(), false
-		);
+	private static Set<MovementSearchBranch> searchTickBranches(User user, SimulationEnvironment environment, Simulator simulator) {
+		MovementSearchInput input = MovementSearchInput.forTick(user, simulator, environment.immutableView(), false);
 		Set<MovementSearchBranch> current = new HashSet<>();
 		current.add(MovementSearchBranch.blank(input));
-		for (SearchBrancher<MovementSearchInput, MovementSearchBranch> brancher
-			: MovementSearchBranchers.tick()) {
+		for (SearchBrancher<MovementSearchInput, MovementSearchBranch> brancher : MovementSearchBranchers.tick()) {
 			Set<MovementSearchBranch> next = new HashSet<>();
 			for (MovementSearchBranch parent : current) {
 				brancher.branch(input, parent, next);
 			}
 			if (next.isEmpty()) {
-				throw new IllegalStateException(
-					brancher.getClass().getSimpleName() + " produced no multi-tick branches"
-				);
+				throw new IllegalStateException(brancher.getClass().getSimpleName() + " produced no multi-tick branches");
 			}
 			current = next;
 		}
 		return current;
 	}
 
-	private static List<CandidatePath> simulateLayerCandidates(
-		User user,
-		SearchParent parent,
-		Set<MovementSearchBranch> branches,
-		int depth,
-		Position startPosition,
-		Position targetPosition,
-		Position lastReportedPosition,
-		double flyingLimit,
-		int parentId,
-		int[] nextCandidateId
-	) {
-		List<MovementSearchBranch> sortedBranches = branches.stream()
-			.sorted(Comparator.comparingLong(MovementSearchBranch::frequencyKey))
-			.toList();
+	private static List<CandidatePath> simulateLayerCandidates(User user, SearchParent parent, Set<MovementSearchBranch> branches, int depth, Position startPosition, Position targetPosition, Position lastReportedPosition, double flyingLimit, int parentId, int[] nextCandidateId) {
+		List<MovementSearchBranch> sortedBranches = branches.stream().sorted(Comparator.comparingLong(MovementSearchBranch::frequencyKey)).toList();
 		List<CandidatePath> candidates = new ArrayList<>(sortedBranches.size());
 		for (MovementSearchBranch branch : sortedBranches) {
-			SimulationEnvironment branchEnvironment = branch.modifiedMutableView(
-				parent.environment()
-			);
-			Simulation simulation = parent.simulator().simulateTick(
-				user,
-				branchEnvironment.mutableBaseMotionCopy(),
-				branchEnvironment.immutableView(),
-				branch.moveConfig()
-			);
+			SimulationEnvironment branchEnvironment = branch.modifiedMutableView(parent.environment());
+			Simulation simulation = parent.simulator().simulateTick(user, branchEnvironment.mutableBaseMotionCopy(), branchEnvironment.immutableView(), branch.moveConfig());
 			simulation.setEnvironment(branchEnvironment);
 			simulation.setCanFinishExplicitTick(branch.canFinishExplicitTick());
 			simulation.setBranchFrequencyKey(branch.frequencyKey());
 			Simulation copy = simulation.reusableCopy();
 			Position predictedPosition = copy.predictedPosition();
 			List<MultiTickStepTrace> steps = new ArrayList<>(parent.steps());
-			Position omittedPacketPosition = parent.environment()
-				.verifiedLastPosition().add(copy.offsetMotion());
+			Position omittedPacketPosition = parent.environment().verifiedLastPosition().add(copy.offsetMotion());
 			double omissionDistance = omittedPacketPosition.distance(lastReportedPosition);
 			boolean implicitEligible = omissionDistance < flyingLimit;
-			steps.add(new MultiTickStepTrace(
-				depth,
-				shortKey(branch.frequencyKey()),
-				formatSampleConfiguration(branch.moveConfig()),
-				formatMotion(copy.offsetMotion()),
-				predictedPosition.getX() - startPosition.getX(),
-				predictedPosition.getY() - startPosition.getY(),
-				predictedPosition.getZ() - startPosition.getZ(),
-				predictedPosition.distance(targetPosition),
-				omissionDistance,
-				implicitEligible,
-				branch.canFinishExplicitTick()
-			));
-			candidates.add(new CandidatePath(
-				nextCandidateId[0]++,
-				parentId,
-				copy,
-				List.copyOf(steps),
-				implicitEligible,
-				copy.predictedPosition().distance(lastReportedPosition)
-			));
+			steps.add(new MultiTickStepTrace(depth, shortKey(branch.frequencyKey()), formatSampleConfiguration(branch.moveConfig()), formatMotion(copy.offsetMotion()), predictedPosition.getX() - startPosition.getX(), predictedPosition.getY() - startPosition.getY(), predictedPosition.getZ() - startPosition.getZ(), predictedPosition.distance(targetPosition), omissionDistance, implicitEligible, branch.canFinishExplicitTick()));
+			candidates.add(new CandidatePath(nextCandidateId[0]++, parentId, copy, List.copyOf(steps), implicitEligible, copy.predictedPosition().distance(lastReportedPosition)));
 			simulation.expire();
 		}
 		return candidates;
@@ -518,15 +306,8 @@ final class PtrBranchingVisualizationTest {
 				unique.putIfAbsent(candidate.simulation(), candidate);
 			}
 		}
-		List<CandidatePath> retained = unique.values().stream()
-			.sorted(Comparator
-				.comparingDouble(CandidatePath::flyingDistance)
-				.thenComparing(candidate -> candidate.simulation().configuration().toString())
-				.thenComparing(candidate -> candidate.steps().getLast().key()))
-			.toList();
-		Set<Integer> uniqueCandidateIds = unique.values().stream()
-			.map(CandidatePath::id)
-			.collect(java.util.stream.Collectors.toSet());
+		List<CandidatePath> retained = unique.values().stream().sorted(Comparator.comparingDouble(CandidatePath::flyingDistance).thenComparing(candidate -> candidate.simulation().configuration().toString()).thenComparing(candidate -> candidate.steps().getLast().key())).toList();
+		Set<Integer> uniqueCandidateIds = unique.values().stream().map(CandidatePath::id).collect(java.util.stream.Collectors.toSet());
 		return new Retention(unique.size(), uniqueCandidateIds, retained);
 	}
 
@@ -534,10 +315,7 @@ final class PtrBranchingVisualizationTest {
 		return right != null && left.equals(right);
 	}
 
-	private static EnvironmentTrace captureEnvironment(
-		User user,
-		SimulationEnvironment environment
-	) {
+	private static EnvironmentTrace captureEnvironment(User user, SimulationEnvironment environment) {
 		Position origin = environment.verifiedLastPosition();
 		BoundingBox playerBox = environment.boundingBox();
 		int originX = (int) Math.floor(origin.getX());
@@ -555,11 +333,7 @@ final class PtrBranchingVisualizationTest {
 					}
 					List<BoundingBox> boxes = state.collisionShape().elementaryBoxes();
 					if (boxes.isEmpty()) {
-						blocks.add(blockTrace(
-							state, false,
-							new BoundingBox(x, y, z, x + 1, y + 1, z + 1),
-							origin
-						));
+						blocks.add(blockTrace(state, false, new BoundingBox(x, y, z, x + 1, y + 1, z + 1), origin));
 						continue;
 					}
 					for (BoundingBox box : boxes) {
@@ -569,63 +343,25 @@ final class PtrBranchingVisualizationTest {
 			}
 		}
 
-		return new EnvironmentTrace(
-			formatPosition(origin),
-			origin.getX(),
-			origin.getY(),
-			origin.getZ(),
-			environment.rotation().yaw(),
-			environment.rotation().pitch(),
-			environment.pose().name(),
-			environment.onGround(),
-			environment.shouldHaveFallFlyingPose(),
-			environment.shouldHaveFallFlyingPose()
-				|| user.meta().movement().hasElytraEquipped(),
-			playerBox.maxX - playerBox.minX,
-			playerBox.maxY - playerBox.minY,
-			blocks
-		);
+		return new EnvironmentTrace(formatPosition(origin), origin.getX(), origin.getY(), origin.getZ(), environment.rotation().yaw(), environment.rotation().pitch(), environment.pose().name(), environment.onGround(), environment.shouldHaveFallFlyingPose(), environment.shouldHaveFallFlyingPose() || user.meta().movement().hasElytraEquipped(), playerBox.maxX - playerBox.minX, playerBox.maxY - playerBox.minY, blocks);
 	}
 
-	private static BlockTrace blockTrace(
-		BlockState state,
-		boolean collidable,
-		BoundingBox box,
-		Position origin
-	) {
-		return new BlockTrace(
-			state.type().name(),
-			collidable,
-			(box.minX + box.maxX) * 0.5 - origin.getX(),
-			(box.minY + box.maxY) * 0.5 - origin.getY(),
-			(box.minZ + box.maxZ) * 0.5 - origin.getZ(),
-			box.maxX - box.minX,
-			box.maxY - box.minY,
-			box.maxZ - box.minZ,
-			formatProperties(state)
-		);
+	private static BlockTrace blockTrace(BlockState state, boolean collidable, BoundingBox box, Position origin) {
+		return new BlockTrace(state.type().name(), collidable, (box.minX + box.maxX) * 0.5 - origin.getX(), (box.minY + box.maxY) * 0.5 - origin.getY(), (box.minZ + box.maxZ) * 0.5 - origin.getZ(), box.maxX - box.minX, box.maxY - box.minY, box.maxZ - box.minZ, formatProperties(state));
 	}
 
 	private static String formatProperties(BlockState state) {
 		if (state.properties().isEmpty()) {
 			return "variant=" + state.variantIndex();
 		}
-		return state.properties().entrySet().stream()
-			.map(entry -> entry.getKey() + "=" + entry.getValue())
-			.collect(java.util.stream.Collectors.joining(","));
+		return state.properties().entrySet().stream().map(entry -> entry.getKey() + "=" + entry.getValue()).collect(java.util.stream.Collectors.joining(","));
 	}
 
 	private static String formatPosition(Position position) {
-		return String.format(
-			Locale.ROOT,
-			"(%.3f, %.3f, %.3f)",
-			position.getX(), position.getY(), position.getZ()
-		);
+		return String.format(Locale.ROOT, "(%.3f, %.3f, %.3f)", position.getX(), position.getY(), position.getZ());
 	}
 
-	private static String friendlyName(
-		SearchBrancher<MovementSearchInput, MovementSearchBranch> brancher
-	) {
+	private static String friendlyName(SearchBrancher<MovementSearchInput, MovementSearchBranch> brancher) {
 		return switch (brancher.getClass().getSimpleName()) {
 			case "RotationBrancher" -> "Rotation";
 			case "PreviousPostTickBrancher" -> "Previous motion";
@@ -641,27 +377,12 @@ final class PtrBranchingVisualizationTest {
 	}
 
 	private static String formatMotion(Motion motion) {
-		return String.format(
-			Locale.ROOT,
-			"(%.6f, %.6f, %.6f)",
-			motion.motionX(), motion.motionY(), motion.motionZ()
-		);
+		return String.format(Locale.ROOT, "(%.6f, %.6f, %.6f)", motion.motionX(), motion.motionY(), motion.motionZ());
 	}
 
 	private static String formatConfiguration(MovementConfiguration config) {
 		String keys = config.keysToString();
-		return String.format(
-			Locale.ROOT,
-			"keys=%s, sprint=%s, jump=%s, item=%s, attacks=%d, reduceBefore=%s, motion=%s, inside=%s",
-			keys.isEmpty() ? "none" : keys,
-			config.isSprinting(),
-			config.isJumping(),
-			config.isHandActive(),
-			config.reduceTicks(),
-			config.reduceBefore(),
-			config.overrideEndMotionToActualMotion() ? "actual" : "offset",
-			config.usesAlternateBlockInsideCheck() ? "alternate" : "normal"
-		);
+		return String.format(Locale.ROOT, "keys=%s, sprint=%s, jump=%s, item=%s, attacks=%d, reduceBefore=%s, motion=%s, inside=%s", keys.isEmpty() ? "none" : keys, config.isSprinting(), config.isJumping(), config.isHandActive(), config.reduceTicks(), config.reduceBefore(), config.overrideEndMotionToActualMotion() ? "actual" : "offset", config.usesAlternateBlockInsideCheck() ? "alternate" : "normal");
 	}
 
 	private static String formatSampleConfiguration(MovementConfiguration config) {
@@ -678,8 +399,7 @@ final class PtrBranchingVisualizationTest {
 			state.add("item");
 		}
 		if (config.isReducing()) {
-			state.add("attacks=" + config.reduceTicks()
-				+ (config.reduceBefore() ? " before" : " after"));
+			state.add("attacks=" + config.reduceTicks() + (config.reduceBefore() ? " before" : " after"));
 		}
 		if (!config.overrideEndMotionToActualMotion()) {
 			state.add("offset motion");
@@ -860,10 +580,7 @@ final class PtrBranchingVisualizationTest {
 		json.append('}');
 	}
 
-	private static void appendEnvironment(
-		StringBuilder json,
-		EnvironmentTrace environment
-	) {
+	private static void appendEnvironment(StringBuilder json, EnvironmentTrace environment) {
 		json.append('{');
 		field(json, "origin", environment.origin()).append(',');
 		field(json, "originX", environment.originX()).append(',');
@@ -902,10 +619,7 @@ final class PtrBranchingVisualizationTest {
 	}
 
 	private static String formatJsonDouble(double value, int precision) {
-		return BigDecimal.valueOf(value)
-			.round(new MathContext(precision))
-			.stripTrailingZeros()
-			.toPlainString();
+		return BigDecimal.valueOf(value).round(new MathContext(precision)).stripTrailingZeros().toPlainString();
 	}
 
 	private static StringBuilder field(StringBuilder json, String name, String value) {
@@ -944,208 +658,67 @@ final class PtrBranchingVisualizationTest {
 		return json.append('"');
 	}
 
-	private record TickTrace(
-		int tick,
-		double loss,
-		int simulations,
-		int depth,
-		int finalBranches,
-		boolean winnerInFirstLayer,
-		String winner,
-		String predicted,
-		String actual,
-		double actualX,
-		double actualY,
-		double actualZ,
-		List<StageTrace> stages,
-		List<BranchTrace> branches,
-		EnvironmentTrace environment,
-		MultiTickTrace multiTick
-	) {
+	private record TickTrace(int tick, double loss, int simulations, int depth, int finalBranches,
+	                         boolean winnerInFirstLayer, String winner, String predicted, String actual, double actualX,
+	                         double actualY, double actualZ, List<StageTrace> stages, List<BranchTrace> branches,
+	                         EnvironmentTrace environment, MultiTickTrace multiTick) {
 	}
 
-	private record StageTrace(
-		String name,
-		int inputs,
-		int attempted,
-		int outputs,
-		int duplicates,
-		int finishable,
-		String winner,
-		Map<Integer, Integer> fanOut,
-		List<String> samples
-	) {
+	private record StageTrace(String name, int inputs, int attempted, int outputs, int duplicates, int finishable,
+	                          String winner, Map<Integer, Integer> fanOut, List<String> samples) {
 	}
 
-	private record BranchTrace(
-		String key,
-		String configuration,
-		double loss,
-		boolean finishable,
-		boolean selected,
-		double motionX,
-		double motionY,
-		double motionZ
-	) {
+	private record BranchTrace(String key, String configuration, double loss, boolean finishable, boolean selected,
+	                           double motionX, double motionY, double motionZ) {
 	}
 
-	private record EnvironmentTrace(
-		String origin,
-		double originX,
-		double originY,
-		double originZ,
-		double yaw,
-		double pitch,
-		String pose,
-		boolean onGround,
-		boolean fallFlying,
-		boolean elytraEquipped,
-		double playerWidth,
-		double playerHeight,
-		List<BlockTrace> blocks
-	) {
+	private record EnvironmentTrace(String origin, double originX, double originY, double originZ, double yaw,
+	                                double pitch, String pose, boolean onGround, boolean fallFlying,
+	                                boolean elytraEquipped, double playerWidth, double playerHeight,
+	                                List<BlockTrace> blocks) {
 	}
 
-	private record BlockTrace(
-		String material,
-		boolean collidable,
-		double centerX,
-		double centerY,
-		double centerZ,
-		double sizeX,
-		double sizeY,
-		double sizeZ,
-		String properties
-	) {
+	private record BlockTrace(String material, boolean collidable, double centerX, double centerY, double centerZ,
+	                          double sizeX, double sizeY, double sizeZ, String properties) {
 	}
 
-	private record MultiTickTrace(
-		int selectedDepth,
-		int productionSimulations,
-		double omissionLimit,
-		boolean selectedPathFound,
-		List<MultiTickLayerTrace> layers,
-		List<MultiTickStepTrace> path,
-		List<MultiTickCandidateTrace> candidates
-	) {
+	private record MultiTickTrace(int selectedDepth, int productionSimulations, double omissionLimit,
+	                              boolean selectedPathFound, List<MultiTickLayerTrace> layers,
+	                              List<MultiTickStepTrace> path, List<MultiTickCandidateTrace> candidates) {
 	}
 
-	private record MultiTickLayerTrace(
-		int depth,
-		int parents,
-		int simulations,
-		int finishable,
-		int exactFinishable,
-		int acceptedFinishable,
-		int mismatchFinishable,
-		int rawImplicitEligible,
-		int implicitEligible,
-		int retained,
-		double bestLoss,
-		double medianLoss,
-		double p90Loss,
-		double closestOmissionDistance,
-		double furthestRetainedDistance,
-		double selectedLoss,
-		boolean selected
-	) {
+	private record MultiTickLayerTrace(int depth, int parents, int simulations, int finishable, int exactFinishable,
+	                                   int acceptedFinishable, int mismatchFinishable, int rawImplicitEligible,
+	                                   int implicitEligible, int retained, double bestLoss, double medianLoss,
+	                                   double p90Loss, double closestOmissionDistance, double furthestRetainedDistance,
+	                                   double selectedLoss, boolean selected) {
 	}
 
-	private record MultiTickStepTrace(
-		int depth,
-		String key,
-		String configuration,
-		String motion,
-		double positionX,
-		double positionY,
-		double positionZ,
-		double remainingLoss,
-		double omissionDistance,
-		boolean implicitEligible,
-		boolean finishable
-	) {
+	private record MultiTickStepTrace(int depth, String key, String configuration, String motion, double positionX,
+	                                  double positionY, double positionZ, double remainingLoss, double omissionDistance,
+	                                  boolean implicitEligible, boolean finishable) {
 	}
 
-	private record MultiTickCandidateTrace(
-		int id,
-		int parentId,
-		int depth,
-		String key,
-		String configuration,
-		String motion,
-		double positionX,
-		double positionY,
-		double positionZ,
-		double remainingLoss,
-		double omissionDistance,
-		boolean implicitEligible,
-		boolean finishable,
-		String retention,
-		boolean production,
-		boolean selected
-	) {
+	private record MultiTickCandidateTrace(int id, int parentId, int depth, String key, String configuration,
+	                                       String motion, double positionX, double positionY, double positionZ,
+	                                       double remainingLoss, double omissionDistance, boolean implicitEligible,
+	                                       boolean finishable, String retention, boolean production, boolean selected) {
 	}
 
-	private record SearchParent(
-		SimulationEnvironment environment,
-		Simulator simulator,
-		List<MultiTickStepTrace> steps,
-		Set<MovementSearchBranch> branches,
-		int candidateId
-	) {
+	private record SearchParent(SimulationEnvironment environment, Simulator simulator, List<MultiTickStepTrace> steps,
+	                            Set<MovementSearchBranch> branches, int candidateId) {
 	}
 
-	private record CandidatePath(
-		int id,
-		int parentId,
-		Simulation simulation,
-		List<MultiTickStepTrace> steps,
-		boolean implicitEligible,
-		double flyingDistance
-	) {
-		private MultiTickCandidateTrace freeze(
-			boolean uniqueEligible,
-			boolean retained,
-			boolean expanded,
-			boolean production,
-			boolean selected
-		) {
+	private record CandidatePath(int id, int parentId, Simulation simulation, List<MultiTickStepTrace> steps,
+	                             boolean implicitEligible, double flyingDistance) {
+		private MultiTickCandidateTrace freeze(boolean uniqueEligible, boolean retained, boolean expanded, boolean production, boolean selected) {
 			MultiTickStepTrace step = steps.getLast();
-			String retention = !implicitEligible
-				? "explicit-only"
-				: expanded
-					? "expanded"
-					: retained
-						? "retained"
-						: step.depth() >= THREE_TICK_SEARCH_LAST_DEPTH
-							? "depth-limit"
-							: uniqueEligible ? "retained" : "merged";
-			return new MultiTickCandidateTrace(
-				id,
-				parentId,
-				step.depth(),
-				step.key(),
-				step.configuration(),
-				step.motion(),
-				step.positionX(),
-				step.positionY(),
-				step.positionZ(),
-				step.remainingLoss(),
-				step.omissionDistance(),
-				step.implicitEligible(),
-				step.finishable(),
-				retention,
-				production,
-				selected
-			);
+			String retention = !implicitEligible ? "explicit-only" : expanded ? "expanded" : retained ? "retained" : step.depth() >= THREE_TICK_SEARCH_LAST_DEPTH ? "depth-limit" : uniqueEligible ? "retained" : "merged";
+			return new MultiTickCandidateTrace(id, parentId, step.depth(), step.key(), step.configuration(), step.motion(), step.positionX(), step.positionY(), step.positionZ(), step.remainingLoss(), step.omissionDistance(), step.implicitEligible(), step.finishable(), retention, production, selected);
 		}
 	}
 
-	private record Retention(
-		int uniqueEligible,
-		Set<Integer> uniqueCandidateIds,
-		List<CandidatePath> retained
-	) {
+	private record Retention(int uniqueEligible, Set<Integer> uniqueCandidateIds, List<CandidatePath> retained) {
 	}
 
 	private static final class MutableMultiTickLayer {
@@ -1175,10 +748,7 @@ final class PtrBranchingVisualizationTest {
 			simulations += candidates.size();
 			for (CandidatePath candidate : candidates) {
 				MultiTickStepTrace step = candidate.steps().getLast();
-				closestOmissionDistance = Math.min(
-					closestOmissionDistance,
-					step.omissionDistance()
-				);
+				closestOmissionDistance = Math.min(closestOmissionDistance, step.omissionDistance());
 				if (candidate.implicitEligible()) {
 					rawImplicitEligible++;
 				}
@@ -1206,34 +776,13 @@ final class PtrBranchingVisualizationTest {
 			implicitEligible += retention.uniqueEligible();
 			retained += retention.retained().size();
 			for (CandidatePath candidate : retention.retained()) {
-				furthestRetainedDistance = Math.max(
-					furthestRetainedDistance,
-					candidate.steps().getLast().omissionDistance()
-				);
+				furthestRetainedDistance = Math.max(furthestRetainedDistance, candidate.steps().getLast().omissionDistance());
 			}
 		}
 
 		private MultiTickLayerTrace freeze() {
 			finishableLosses.sort(Double::compareTo);
-			return new MultiTickLayerTrace(
-				depth,
-				parents,
-				simulations,
-				finishable,
-				exactFinishable,
-				acceptedFinishable,
-				mismatchFinishable,
-				rawImplicitEligible,
-				implicitEligible,
-				retained,
-				Double.isFinite(bestLoss) ? bestLoss : -1,
-				percentile(finishableLosses, 0.5),
-				percentile(finishableLosses, 0.9),
-				Double.isFinite(closestOmissionDistance) ? closestOmissionDistance : -1,
-				Double.isFinite(furthestRetainedDistance) ? furthestRetainedDistance : -1,
-				Double.isFinite(selectedLoss) ? selectedLoss : -1,
-				selected
-			);
+			return new MultiTickLayerTrace(depth, parents, simulations, finishable, exactFinishable, acceptedFinishable, mismatchFinishable, rawImplicitEligible, implicitEligible, retained, Double.isFinite(bestLoss) ? bestLoss : -1, percentile(finishableLosses, 0.5), percentile(finishableLosses, 0.9), Double.isFinite(closestOmissionDistance) ? closestOmissionDistance : -1, Double.isFinite(furthestRetainedDistance) ? furthestRetainedDistance : -1, Double.isFinite(selectedLoss) ? selectedLoss : -1, selected);
 		}
 
 		private static double percentile(List<Double> sortedValues, double quantile) {
@@ -1271,54 +820,23 @@ final class PtrBranchingVisualizationTest {
 		}
 
 		private void captureOutputs(Set<MovementSearchBranch> branches) {
-			outputs = branches.stream()
-				.sorted(Comparator
-					.comparing((MovementSearchBranch branch) ->
-						formatConfiguration(branch.moveConfig()))
-					.thenComparingLong(MovementSearchBranch::frequencyKey))
-				.toList();
-			finishable = (int) branches.stream()
-				.filter(MovementSearchBranch::canFinishExplicitTick)
-				.count();
+			outputs = branches.stream().sorted(Comparator.comparing((MovementSearchBranch branch) -> formatConfiguration(branch.moveConfig())).thenComparingLong(MovementSearchBranch::frequencyKey)).toList();
+			finishable = (int) branches.stream().filter(MovementSearchBranch::canFinishExplicitTick).count();
 		}
 
 		private StageTrace freeze() {
-			String winner = outputs.stream()
-				.filter(branch -> branch.frequencyKey() == winnerFrequencyKey)
-				.findFirst()
-				.map(branch -> shortKey(branch.frequencyKey()) + " · "
-					+ formatSampleConfiguration(branch.moveConfig()))
-				.orElse("");
-			List<String> samples = outputs.stream()
-				.limit(SAMPLE_CONFIGURATIONS)
-				.map(branch -> shortKey(branch.frequencyKey()) + " · "
-					+ formatSampleConfiguration(branch.moveConfig()))
-				.toList();
-			return new StageTrace(
-				name,
-				inputs,
-				attemptedChildren,
-				outputs.size(),
-				duplicateChildren,
-				finishable,
-				winner,
-				Map.copyOf(fanOut),
-				samples
-			);
+			String winner = outputs.stream().filter(branch -> branch.frequencyKey() == winnerFrequencyKey).findFirst().map(branch -> shortKey(branch.frequencyKey()) + " · " + formatSampleConfiguration(branch.moveConfig())).orElse("");
+			List<String> samples = outputs.stream().limit(SAMPLE_CONFIGURATIONS).map(branch -> shortKey(branch.frequencyKey()) + " · " + formatSampleConfiguration(branch.moveConfig())).toList();
+			return new StageTrace(name, inputs, attemptedChildren, outputs.size(), duplicateChildren, finishable, winner, Map.copyOf(fanOut), samples);
 		}
 	}
 
-	private static final class RecordingOutput
-		extends AbstractCollection<MovementSearchBranch> {
+	private static final class RecordingOutput extends AbstractCollection<MovementSearchBranch> {
 		private final Set<MovementSearchBranch> output;
 		private final MovementSearchBranch parent;
 		private final MutableStage stage;
 
-		private RecordingOutput(
-			Set<MovementSearchBranch> output,
-			MovementSearchBranch parent,
-			MutableStage stage
-		) {
+		private RecordingOutput(Set<MovementSearchBranch> output, MovementSearchBranch parent, MutableStage stage) {
 			this.output = output;
 			this.parent = parent;
 			this.stage = stage;
@@ -1552,7 +1070,7 @@ final class PtrBranchingVisualizationTest {
 		<main>
 			<h1>Physics Branch Visualization</h1>
 			<p class="subtitle"><code>__RECORDING__</code> · protocol __CLIENT_PROTOCOL__ · server __SERVER_VERSION__</p>
-
+		
 			<div class="toolbar" aria-label="Tick navigation">
 				<button id="previous" type="button">← Previous</button>
 				<button id="play" type="button" aria-pressed="false">▶ Play</button>
@@ -1560,7 +1078,7 @@ final class PtrBranchingVisualizationTest {
 				<button id="next" type="button">Next →</button>
 				<strong id="tick-label">Tick</strong>
 			</div>
-
+		
 			<section class="possibility-browser" aria-label="Physics possibility browser">
 				<aside class="browser-sidebar">
 					<header class="browser-sidebar-header">
@@ -1580,7 +1098,7 @@ final class PtrBranchingVisualizationTest {
 						<div id="branch-grid" class="branch-grid" aria-label="Implicit and explicit candidates by simulated tick"></div>
 					</section>
 				</aside>
-
+		
 				<article class="browser-page">
 					<header class="page-header">
 						<div>
@@ -1590,7 +1108,7 @@ final class PtrBranchingVisualizationTest {
 						</div>
 						<span id="selection-status" class="page-status">Selected</span>
 					</header>
-
+		
 					<div class="window-header">
 						<div class="legend" aria-label="3D player states">
 							<span class="legend-item"><span class="swatch" style="color: var(--muted)"></span>start</span>
@@ -1603,13 +1121,13 @@ final class PtrBranchingVisualizationTest {
 					<div id="world-viewport" class="world-viewport" aria-label="Interactive 3D view of the selected possibility">
 						<div class="world-overlay"><span>Drag to orbit · wheel to zoom · 1-block grid</span></div>
 					</div>
-
+		
 					<div class="page-content">
 						<section id="path-page" class="page-section">
 							<h3>Production route</h3>
 							<ol id="multi-path" class="multi-path" aria-label="Selected multi-tick path"></ol>
 						</section>
-
+		
 						<section id="layer-page" class="page-section" hidden>
 							<div class="graph-heading">
 								<h3>Layer expansion</h3>
@@ -1628,7 +1146,7 @@ final class PtrBranchingVisualizationTest {
 								<dl id="multi-layer-metrics" class="metrics multi-layer-metrics"></dl>
 							</div>
 						</section>
-
+		
 						<section id="branch-page" class="page-section" hidden>
 							<h3>Candidate state</h3>
 							<div class="branch-detail" aria-live="polite">
@@ -1645,7 +1163,7 @@ final class PtrBranchingVisualizationTest {
 								<div id="candidate-children" class="candidate-child-list"></div>
 							</div>
 						</section>
-
+		
 						<details id="stage-drilldown" class="stage-drilldown">
 							<summary>How first-tick alternatives were constructed</summary>
 							<div class="stage-drilldown-body">
@@ -1670,14 +1188,14 @@ final class PtrBranchingVisualizationTest {
 					</div>
 				</article>
 			</section>
-
+		
 			<p class="explainer">The production route is the simulation actually selected. The candidate tree diagnostically replays every unique omission-safe continuation for up to three ticks; equivalent candidates remain visible as merged nodes without duplicating the same child tree.</p>
 		</main>
-
+		
 		<script type="module">
 		import * as THREE from 'three';
 		import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-
+		
 		const trace = __TRACE_DATA__;
 		const ASSET_VERSION = '__ASSET_VERSION__';
 		const EXACT_LOSS = 0.0001;
@@ -1732,7 +1250,7 @@ final class PtrBranchingVisualizationTest {
 				const startY = recordedOrigins[index][1] - baseOrigin[1];
 				return Math.min(lowest, startY, startY + tick.actualY);
 			}, Number.POSITIVE_INFINITY);
-
+		
 		const svg = document.getElementById('flow');
 		const multiSvg = document.getElementById('multi-flow');
 		const NS = 'http://www.w3.org/2000/svg';
@@ -1764,13 +1282,13 @@ final class PtrBranchingVisualizationTest {
 			const precision = Math.max(1, Math.min(15, significantDigits));
 			return trimDecimal(expandScientificNotation(Number(value).toPrecision(precision)));
 		};
-
+		
 		const fitOf = loss => loss <= EXACT_LOSS
 			? { key: 'exact', label: 'Exact', color: 0x35b779 }
 			: loss <= ACCEPTED_LOSS
 				? { key: 'accepted', label: 'Accepted', color: 0xe4a23a }
 				: { key: 'mismatch', label: 'Mismatch', color: 0xe5655d };
-
+		
 		const viewport = document.getElementById('world-viewport');
 		const darkTheme = window.matchMedia('(prefers-color-scheme: dark)').matches;
 		const scene = new THREE.Scene();
@@ -1825,7 +1343,7 @@ final class PtrBranchingVisualizationTest {
 		let renderedPathTick = -1;
 		let worldActors = null;
 		let playbackStartedAt = 0;
-
+		
 		const textureData = Object.freeze({
 			sand: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAACmElEQVR42j1TWU8TURS+P9gnH3zEqMRIlCgUIlD21pYiiyyphKW1DVhKW9rpNtNlOqWFUhqtIUFRSfy83xn04WY6nXO+7ZyrEpFhtKwlnJlB1ErT6NgrqBankU+PwcpPoVV/B9uch5Xzwin5UTcWcPs9j5PDYVTyXqiGuSCFzdIyLmsbiG6/kObcySgK6XG0nAg61XUADurlWTQKPqkn2FX7PVSrvIx+K4xf/TjK2QnNNIlybkKrmZHDJqogSLe+gUp2FtnjN0Ly80sMKp14jfLphEik1FzSA6eyAOPEA7vow4flhxr4rcglUNdZw2VjVWxGd55AnTeCUkD0f0+eTmVNnrnEODIJl5EqzNQc4vuD6J+HkYy/hMpoBY41r2WNap/X4vuqvQJmYxtBsXPd2xYrR5HnUmekPKKAQGo/PACnEEIqOiaeoztP0ar5xBJZmQtBqAa3adRLc6KEdiuZRSgisaBTXZN0CUL/F40l3N0cuLkcusFSHfPhxPq9tACpZmVRFHw9C+sxrqNZDEkhGfl/KT0F/MkjtvtM2Bl4LeuHrcdJMhXbG4RleHFurUrSVGHnAxIeLVAhG3n63Q15b5ZCMDMz6OmslKMVNItLCPke4EInn/g0JGpMY1KYrju7OsRNdJohmRIB7u562pL7W53qEbHxwgkgeTAinhkcGblUfJffWhl+x0UVD3Pa2xqA4hayiL6/XW5KSPmUXuGqH5GPj5GIDt2DeaWJ8kmYS45IHqphBSRNbuTW6iMpIgMBb7oHkviPK/c+0G7b9t9PbR2l5Kx7Fyw9T1PLzmrURiGoP7h34Ezvw3HslV60RextD/xvTEU9UktwRRltOyAfORHAkM1MxNwwGRSDpDLeRKfol/Gx/rMO/C9Xyk2G8nSvpQAAAABJRU5ErkJggg==',
 			sandstoneSide: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAC0ElEQVR42j1TaVPaUBTNH24tase2o92s2+h0mel0puICIpW6UjYVBAOyCAKyExIgLAEBddraH3B6c1E/nORlXu55955zntBTf+G65WF0aw40yrtoSLu463vRb7gZw7Wd14Omh791DJouCB3lJ8rJDVQyG1ByZn6XUhbkEqtIRj6jeGlEIWWElF3n/XzaCE21Q6t70K7uQ4iIsyjQT7mLT4ievkP87D2iwRkkIgsIn04jIk4jJr7GmfcVQt5RpGJzSMW/IeRfRNA7BSEe+oi7mxA6NTduNTcS4Tf4Owg/ttlr+KBVPfC7R/hbX1+prsd9IRF+CylnoRZXULr8zgSqZCJCG2lhhUTdBb0GtCr7tG9EtWCCVnOilF5FrWiCUM5scqEOpbDOBI3KHm1aSTQn1PImwv5xItiDlFmFnF1DrWAlol2I3hcQ5NwPpM+XGInIPBNc0Pyq5EKr6sTpoYEJoqRVU9lHTdpBKbOOWumeQBfmTz/INvZUB89/0wkgHl6CLvBN28X4N/CxoMnYVxZaL77tnkLQH5W8FW15H0rWTK2ZyY1JLuo1fZBzO6jkVtBStpFJLN7770YkMDUkKNLsDZkEqwwhk9/hkzH0VSeqRduw7bINxfQaxKMREtcOVd5GyPcSdRqHRhgjtslHFNPLSEZn+FQdnbqT3stQSmbEQzOkwQGigXGGePgMwu/uER7QlHdxTiE6cT9FxP+coReHfBOMQfuYC1vyFm47fobQbzooGMdcnIwu4LrtZLIH8fTCm26YBZbzNhJ3Hl1adyhgjYodQpda1AmKqRUeoZQ2k9/Wod80u05Qzm5RTpb5H/FolO6Bg2wmcbMWCKnYF8r+LDQSS8+/krfgigJUl+wIHE5APyAe0tO5Ta3b2Eqf8wkFbAMBz1PqgFq5bh/SJaHwlE2IBT8wguSzphxQnC3sjHhkoNs5hx6dfqt5yCkDjXqM/6F/Rx5wEVOFAAAAAElFTkSuQmCC',
@@ -1873,7 +1391,7 @@ final class PtrBranchingVisualizationTest {
 			assetTextures.set(reference, texture);
 			return texture;
 		};
-
+		
 		const textureAliases = Object.freeze({
 			BARRIER: 'item:barrier',
 			BUBBLE_COLUMN: 'water_still',
@@ -1913,7 +1431,7 @@ final class PtrBranchingVisualizationTest {
 			HONEY_BLOCK: .82,
 			WATER: .56
 		});
-
+		
 		const resizeWorld = () => {
 			const width = Math.max(1, viewport.clientWidth);
 			const height = Math.max(1, viewport.clientHeight);
@@ -1928,7 +1446,7 @@ final class PtrBranchingVisualizationTest {
 			controls.update();
 			renderer.render(scene, camera);
 		});
-
+		
 		function clearGroup(group) {
 			while (group.children.length) {
 				const child = group.children.pop();
@@ -1939,7 +1457,7 @@ final class PtrBranchingVisualizationTest {
 				});
 			}
 		}
-
+		
 		function textureReference(material, properties) {
 			if (material.endsWith('_CORAL_WALL_FAN')) {
 				return material.replace('_WALL_FAN', '_FAN').toLowerCase();
@@ -1956,7 +1474,7 @@ final class PtrBranchingVisualizationTest {
 			}
 			return textureAliases[material] ?? material.toLowerCase();
 		}
-
+		
 		function blockFaces(material, properties) {
 			const reference = textureReference(material, properties);
 			let side = reference;
@@ -1965,7 +1483,7 @@ final class PtrBranchingVisualizationTest {
 			let sideTint = 0xffffff;
 			let topTint = 0xffffff;
 			let bottomTint = 0xffffff;
-
+		
 			if (material === 'GRASS_BLOCK' || material === 'LEGACY_GRASS') {
 				side = legacyAssets ? 'grass_side' : 'grass_block_side';
 				top = legacyAssets ? 'grass_top' : 'grass_block_top';
@@ -2006,14 +1524,14 @@ final class PtrBranchingVisualizationTest {
 				top = `log_${wood}_top`;
 				bottom = top;
 			}
-
+		
 			if (foliageBlocks.has(material)) {
 				const tint = material === 'BIRCH_LEAVES' ? 0x80a755 : 0x77ab2f;
 				sideTint = tint;
 				topTint = tint;
 				bottomTint = tint;
 			}
-
+		
 			return {
 				side: assetTexture(side),
 				top: assetTexture(top),
@@ -2029,7 +1547,7 @@ final class PtrBranchingVisualizationTest {
 				emissive: material === 'LAVA' ? 0x5c2200 : 0x000000
 			};
 		}
-
+		
 		function faceMaterial(map, opacity = 1, tint = 0xffffff, alphaTest = .01, emissive = 0x000000) {
 			return new THREE.MeshStandardMaterial({
 				map,
@@ -2044,7 +1562,7 @@ final class PtrBranchingVisualizationTest {
 				depthWrite: opacity > .8
 			});
 		}
-
+		
 		function addCrossedBlock(group, block, offset, faces) {
 			const [, , x, y, z, sx, sy, sz] = block;
 			const width = Math.max(.18, Math.max(sx, sz) * .9);
@@ -2068,7 +1586,7 @@ final class PtrBranchingVisualizationTest {
 			}
 			group.add(plant);
 		}
-
+		
 		function addFlatBlock(group, block, offset, faces) {
 			const [, , x, y, z, sx, sy, sz] = block;
 			const geometry = new THREE.PlaneGeometry(sx * .92, sz * .92);
@@ -2082,7 +1600,7 @@ final class PtrBranchingVisualizationTest {
 			plane.receiveShadow = true;
 			group.add(plane);
 		}
-
+		
 		function addBlockBatch(group, batch, offset) {
 			const { material, collidable, properties, blocks } = batch;
 			const faces = blockFaces(material, properties);
@@ -2113,7 +1631,7 @@ final class PtrBranchingVisualizationTest {
 			mesh.castShadow = opacity > .8 && material !== 'SLIME_BLOCK';
 			group.add(mesh);
 		}
-
+		
 		function addBlocks(group, blocks, offset) {
 			const batches = new Map();
 			for (const block of blocks) {
@@ -2138,17 +1656,17 @@ final class PtrBranchingVisualizationTest {
 			}
 			for (const batch of batches.values()) addBlockBatch(group, batch, offset);
 		}
-
+		
 		const stableCoordinate = value => Math.round(value * 10000000) / 10000000;
-
+		
 		function terrainCellCoordinate(relative, origin) {
 			return Math.floor(stableCoordinate(relative + origin));
 		}
-
+		
 		function terrainCellKey(x, y, z) {
 			return `${x}|${y}|${z}`;
 		}
-
+		
 		function sceneBlock(block, offset) {
 			const global = block.slice();
 			for (let axis = 0; axis < 3; axis++) {
@@ -2156,7 +1674,7 @@ final class PtrBranchingVisualizationTest {
 			}
 			return global;
 		}
-
+		
 		function sameBlockList(left, right) {
 			return left.length === right.length && left.every((block, blockIndex) => {
 				const previous = right[blockIndex];
@@ -2164,7 +1682,7 @@ final class PtrBranchingVisualizationTest {
 					&& block.every((component, componentIndex) => component === previous[componentIndex]);
 			});
 		}
-
+		
 		function observedTerrainBounds(environment) {
 			const x = Math.floor(environment.originX);
 			const y = Math.floor(environment.originY);
@@ -2178,13 +1696,13 @@ final class PtrBranchingVisualizationTest {
 				maxZ: z + TERRAIN_BLOCK_RADIUS
 			};
 		}
-
+		
 		function cellIsObserved(cell, bounds) {
 			return cell.x >= bounds.minX && cell.x <= bounds.maxX
 				&& cell.y >= bounds.minY && cell.y <= bounds.maxY
 				&& cell.z >= bounds.minZ && cell.z <= bounds.maxZ;
 		}
-
+		
 		function renderTerrain(tick, offset) {
 			const environment = tick.environment;
 			const observedCells = new Map();
@@ -2200,14 +1718,14 @@ final class PtrBranchingVisualizationTest {
 				}
 				cell.blocks.push(sceneBlock(block, offset));
 			}
-
+		
 			let dirty = false;
 			for (const [key, cell] of observedCells) {
 				const previous = terrainCells.get(key);
 				if (!previous || !sameBlockList(cell.blocks, previous.blocks)) dirty = true;
 				terrainCells.set(key, { ...cell, lastSeenTick: tick.tick });
 			}
-
+		
 			const bounds = observedTerrainBounds(environment);
 			for (const [key, cell] of terrainCells) {
 				const observedAsAir = cellIsObserved(cell, bounds) && !observedCells.has(key);
@@ -2217,14 +1735,14 @@ final class PtrBranchingVisualizationTest {
 					dirty = true;
 				}
 			}
-
+		
 			if (!dirty) return;
 			clearGroup(terrainGroup);
 			const retainedBlocks = [];
 			for (const cell of terrainCells.values()) retainedBlocks.push(...cell.blocks);
 			addBlocks(terrainGroup, retainedBlocks, [0, 0, 0]);
 		}
-
+		
 		function addHitbox(position, width, height, color, opacity, parent = playerGroup) {
 			const geometry = new THREE.BoxGeometry(1, 1, 1);
 			const edgeGeometry = new THREE.EdgesGeometry(geometry);
@@ -2236,7 +1754,7 @@ final class PtrBranchingVisualizationTest {
 			parent.add(outline);
 			return outline;
 		}
-
+		
 		// Minecraft skin UV layout adapted from skinview3d's MIT-licensed model.
 		function setSkinUVs(box, u, v, width, height, depth, atlasWidth = 64, atlasHeight = 64) {
 			const face = (x1, y1, x2, y2) => [
@@ -2264,7 +1782,7 @@ final class PtrBranchingVisualizationTest {
 			)));
 			box.attributes.uv.needsUpdate = true;
 		}
-
+		
 		""";
 
 	private static final String HTML_TAIL = """
@@ -2284,7 +1802,7 @@ final class PtrBranchingVisualizationTest {
 			inner.position.set(...localCenter);
 			inner.castShadow = true;
 			part.add(inner);
-
+		
 			const outerGeometry = new THREE.BoxGeometry(
 				size[0] + .5, size[1] + .5, size[2] + .5
 			);
@@ -2303,7 +1821,7 @@ final class PtrBranchingVisualizationTest {
 			part.add(outer);
 			return part;
 		}
-
+		
 		function createElytra(parent) {
 			const material = new THREE.MeshStandardMaterial({
 				map: assetTexture('entity:elytra'),
@@ -2331,7 +1849,7 @@ final class PtrBranchingVisualizationTest {
 				right: wing(-5, 5, true)
 			};
 		}
-
+		
 		function addSkinnedPlayer(position, width, height, yaw, fitColor) {
 			const model = new THREE.Group();
 			const rig = new THREE.Group();
@@ -2357,7 +1875,7 @@ final class PtrBranchingVisualizationTest {
 			const hitbox = addHitbox(position, width, height, fitColor, .95);
 			return { model, rig, parts, elytra, hitbox };
 		}
-
+		
 		function createMotionArrow(color) {
 			const arrow = new THREE.ArrowHelper(
 				new THREE.Vector3(1, 0, 0),
@@ -2371,7 +1889,7 @@ final class PtrBranchingVisualizationTest {
 			playerGroup.add(arrow);
 			return arrow;
 		}
-
+		
 		function updateMotionArrow(arrow, origin, motion, progress) {
 			const vector = new THREE.Vector3(...motion).multiplyScalar(progress);
 			const length = vector.length();
@@ -2385,20 +1903,20 @@ final class PtrBranchingVisualizationTest {
 				Math.min(.08, length * .2)
 			);
 		}
-
+		
 		function moved(origin, motion, progress) {
 			return origin.map((value, axis) => value + motion[axis] * progress);
 		}
-
+		
 		function setHitboxPosition(hitbox, position, height) {
 			hitbox.position.set(position[0], position[1] + height / 2, position[2]);
 		}
-
+		
 		function interpolateYaw(from, to, progress) {
 			const delta = ((to - from + 540) % 360) - 180;
 			return from + delta * progress;
 		}
-
+		
 		const followTarget = new THREE.Vector3();
 		const cameraShift = new THREE.Vector3();
 		function followPlayer(position, height) {
@@ -2407,7 +1925,7 @@ final class PtrBranchingVisualizationTest {
 			camera.position.add(cameraShift);
 			controls.target.copy(followTarget);
 		}
-
+		
 		function addMultiTickPath(tick, origin, width, height) {
 			const path = tick.multiTick?.path ?? [];
 			if (path.length < 2) return;
@@ -2435,7 +1953,7 @@ final class PtrBranchingVisualizationTest {
 				pathGroup.add(marker);
 			}
 		}
-
+		
 		function elytraTarget(tick, motion) {
 			let x = .2617994;
 			let y = 0;
@@ -2457,7 +1975,7 @@ final class PtrBranchingVisualizationTest {
 			}
 			return { x, y, z, verticalOffset };
 		}
-
+		
 		function animatePlayerModel(player, tick, nextTick, motion, progress, position) {
 			const nextMotion = [nextTick.actualX, nextTick.actualY, nextTick.actualZ];
 			const distance = Math.hypot(motion[0], motion[2]);
@@ -2471,7 +1989,7 @@ final class PtrBranchingVisualizationTest {
 			player.parts.leftLeg.rotation.x = -legSwing;
 			player.parts.rightArm.rotation.x = -legSwing * .72;
 			player.parts.leftArm.rotation.x = legSwing * .72;
-
+		
 			const nextCrouching = nextTick.environment.pose === 'CROUCHING' ? 1 : 0;
 			const crouching = THREE.MathUtils.lerp(
 				tick.environment.pose === 'CROUCHING' ? 1 : 0,
@@ -2484,7 +2002,7 @@ final class PtrBranchingVisualizationTest {
 			) - player.parts.body.rotation.x;
 			player.parts.rightArm.rotation.x += crouching * .18;
 			player.parts.leftArm.rotation.x += crouching * .18;
-
+		
 			const currentFlightAngle = tick.environment.fallFlying
 				? Math.PI / 2 + THREE.MathUtils.degToRad(tick.environment.pitch)
 				: 0;
@@ -2509,7 +2027,7 @@ final class PtrBranchingVisualizationTest {
 				position[1] + bob + flightCenterOffset * flightBlend,
 				position[2]
 			);
-
+		
 			if (!player.elytra) return;
 			const visible = tick.environment.elytraEquipped || nextTick.environment.elytraEquipped;
 			player.elytra.left.visible = visible;
@@ -2530,7 +2048,7 @@ final class PtrBranchingVisualizationTest {
 			player.elytra.left.rotation.set(wingX, wingY, wingZ);
 			player.elytra.right.rotation.set(wingX, -wingY, -wingZ);
 		}
-
+		
 		function focusedPossibility(tick) {
 			if (state.focusKind === 'candidate') {
 				const candidate = tick.multiTick.candidates.find(candidate => candidate.id === state.candidateId);
@@ -2560,7 +2078,7 @@ final class PtrBranchingVisualizationTest {
 				? { motion: [fallback.x, fallback.y, fallback.z], loss: fallback.loss, label: 'closest branch' }
 				: { motion: [0, 0, 0], loss: tick.loss, label: 'possibility' };
 		}
-
+		
 		function updateWorldInterpolation(tick) {
 			if (!worldActors) return;
 			const rawProgress = reducedMotion
@@ -2595,7 +2113,7 @@ final class PtrBranchingVisualizationTest {
 			updateMotionArrow(worldActors.predictedArrow, origin, predictedMotion, progress);
 			followPlayer(recordedPosition, tick.environment.playerHeight);
 		}
-
+		
 		function renderWorld(tick) {
 			const origin = originOffset(state.tickIndex);
 			renderTerrain(tick, origin);
@@ -2631,7 +2149,7 @@ final class PtrBranchingVisualizationTest {
 			updateWorldInterpolation(tick);
 			document.getElementById('world-origin').textContent = `Jpx3 · ${tick.environment.pose.toLowerCase().replace('_', ' ')} · yaw ${tick.environment.yaw.toFixed(1)}° · start ${tick.environment.origin}`;
 		}
-
+		
 		function setPlaying(playing) {
 			state.playing = playing;
 			play.textContent = playing ? '❚❚ Pause' : '▶ Play';
@@ -2640,7 +2158,7 @@ final class PtrBranchingVisualizationTest {
 				playbackStartedAt = performance.now() - state.progress * TICK_DURATION_MS;
 			}
 		}
-
+		
 		function updatePlayback(now) {
 			if (!state.playing || trace.length === 0) return;
 			let tickProgress = (now - playbackStartedAt) / TICK_DURATION_MS;
@@ -2666,12 +2184,12 @@ final class PtrBranchingVisualizationTest {
 			state.progress = Math.max(0, Math.min(1, tickProgress));
 			updateWorldInterpolation(trace[state.tickIndex]);
 		}
-
+		
 		function stopForManualNavigation() {
 			setPlaying(false);
 			state.progress = 1;
 		}
-
+		
 		function render(includeDetails = true) {
 			const tick = trace[state.tickIndex];
 			if (!tick) return;
@@ -2692,16 +2210,16 @@ final class PtrBranchingVisualizationTest {
 			}
 			renderWorld(tick);
 		}
-
+		
 		function defaultBranchIndex(tick) {
 			const productionWinner = tick.branches.findIndex(branch => branch.selected);
 			return productionWinner >= 0 ? productionWinner : 0;
 		}
-
+		
 		function defaultMultiLayerIndex(tick) {
 			return Math.min(tick.multiTick.selectedDepth, tick.multiTick.layers.length - 1);
 		}
-
+		
 		function resetPossibilityFocus(tick) {
 			state.branchIndex = defaultBranchIndex(tick);
 			state.multiLayerIndex = defaultMultiLayerIndex(tick);
@@ -2716,7 +2234,7 @@ final class PtrBranchingVisualizationTest {
 			);
 			state.focusKind = tick.multiTick.selectedPathFound ? 'path' : 'candidate';
 		}
-
+		
 		function retentionLabel(candidate) {
 			return {
 				'expanded': 'implicit · expanded',
@@ -2726,7 +2244,7 @@ final class PtrBranchingVisualizationTest {
 				'explicit-only': 'explicit only'
 			}[candidate.retention] ?? candidate.retention;
 		}
-
+		
 		function candidateGroups(tick) {
 			const groups = new Map();
 			for (const candidate of tick.multiTick.candidates) {
@@ -2738,7 +2256,7 @@ final class PtrBranchingVisualizationTest {
 			}
 			return groups;
 		}
-
+		
 		function selectCandidate(candidate) {
 			stopForManualNavigation();
 			state.focusKind = 'candidate';
@@ -2748,7 +2266,7 @@ final class PtrBranchingVisualizationTest {
 			}
 			render();
 		}
-
+		
 		function candidateButton(candidate, compact = false) {
 			const fit = fitOf(candidate.loss);
 			const button = document.createElement('button');
@@ -2772,7 +2290,7 @@ final class PtrBranchingVisualizationTest {
 			button.addEventListener('click', () => selectCandidate(candidate));
 			return button;
 		}
-
+		
 		function renderCandidateDetail(tick, groups) {
 			const candidates = tick.multiTick.candidates;
 			let candidate = candidates.find(candidate => candidate.id === state.candidateId);
@@ -2791,7 +2309,7 @@ final class PtrBranchingVisualizationTest {
 				childList.append(empty);
 				return;
 			}
-
+		
 			const fit = fitOf(candidate.loss);
 			const title = document.getElementById('branch-title');
 			title.className = `fit-line ${fit.key}`;
@@ -2800,7 +2318,7 @@ final class PtrBranchingVisualizationTest {
 			document.getElementById('branch-motion').textContent = `motion ${candidate.motion} → accumulated position (${candidate.x.toFixed(6)}, ${candidate.y.toFixed(6)}, ${candidate.z.toFixed(6)})`;
 			const comparison = candidate.implicitEligible ? '<' : '≥';
 			document.getElementById('branch-finish').textContent = `${candidate.implicitEligible ? 'Implicit-eligible' : 'Explicit-only'}: omission ${formatDecimal(candidate.omissionDistance, 5)} ${comparison} ${formatDecimal(tick.multiTick.omissionLimit, 5)}${candidate.finishable ? '' : ' · cannot finish an explicit tick'}`;
-
+		
 			if (children.length) {
 				children.forEach(child => childList.append(candidateButton(child, true)));
 				return;
@@ -2814,7 +2332,7 @@ final class PtrBranchingVisualizationTest {
 			}[candidate.retention] ?? 'No distinct child alternatives were generated.';
 			childList.append(empty);
 		}
-
+		
 		function renderBranches(tick) {
 			const grid = document.getElementById('branch-grid');
 			const groups = candidateGroups(tick);
@@ -2852,12 +2370,12 @@ final class PtrBranchingVisualizationTest {
 				}
 			};
 			appendChildren(-1, 0);
-
+		
 			const roots = groups.get(-1) ?? [];
 			document.getElementById('fit-summary').textContent = `${roots.length.toLocaleString()} roots · ${tick.multiTick.candidates.length.toLocaleString()} total`;
 			renderCandidateDetail(tick, groups);
 		}
-
+		
 		function renderSelection(tick) {
 			const pathPage = document.getElementById('path-page');
 			const layerPage = document.getElementById('layer-page');
@@ -2868,7 +2386,7 @@ final class PtrBranchingVisualizationTest {
 			layerPage.hidden = state.focusKind !== 'layer';
 			branchPage.hidden = state.focusKind !== 'candidate';
 			stageDrilldown.hidden = state.focusKind !== 'candidate' || candidate?.depth !== 0;
-
+		
 			const kicker = document.getElementById('selection-kicker');
 			const title = document.getElementById('selection-title');
 			const summary = document.getElementById('selection-summary');
@@ -2910,7 +2428,7 @@ final class PtrBranchingVisualizationTest {
 				? 'Implicit continuation'
 				: `${fit.label} · selected`;
 		}
-
+		
 		function renderPicker(tick) {
 			const picker = document.getElementById('stage-picker');
 			picker.replaceChildren();
@@ -2923,7 +2441,7 @@ final class PtrBranchingVisualizationTest {
 				picker.append(button);
 			});
 		}
-
+		
 		function renderGraph(tick) {
 			const width = Math.max(720, svg.clientWidth || 720);
 			const height = 260;
@@ -2934,7 +2452,7 @@ final class PtrBranchingVisualizationTest {
 			const stages = tick.stages;
 			const step = (width - margin * 2) / Math.max(1, stages.length - 1);
 			const radius = count => 11 + Math.min(25, Math.log2(Math.max(1, count)) * 3.5);
-
+		
 			for (let index = 1; index < stages.length; index++) {
 				const previousStage = stages[index - 1];
 				const stage = stages[index];
@@ -2950,7 +2468,7 @@ final class PtrBranchingVisualizationTest {
 					svg.append(path);
 				}
 			}
-
+		
 			stages.forEach((stage, index) => {
 				const x = margin + index * step;
 				const r = radius(stage.outputs);
@@ -2962,7 +2480,7 @@ final class PtrBranchingVisualizationTest {
 				});
 				circle.addEventListener('click', () => { state.stageIndex = index; render(); });
 				svg.append(circle);
-
+		
 				const representativeDots = Math.min(8, Math.ceil(Math.log2(Math.max(1, stage.outputs))));
 				for (let dot = 0; dot < representativeDots; dot++) {
 					const angle = (Math.PI * 2 * dot) / representativeDots - Math.PI / 2;
@@ -2973,7 +2491,7 @@ final class PtrBranchingVisualizationTest {
 						class: 'flow-dot'
 					}));
 				}
-
+		
 				const name = element('text', { x, y: 55 + (index % 2) * 22, class: 'flow-name' });
 				name.textContent = stage.name;
 				svg.append(name);
@@ -2982,7 +2500,7 @@ final class PtrBranchingVisualizationTest {
 				svg.append(count);
 			});
 		}
-
+		
 		function renderMultiLayerDetail(multiTick, layer, isFinalLayer) {
 			document.getElementById('multi-layer-title').textContent = `Tick ${layer.depth + 1}`;
 			document.getElementById('multi-layer-status').textContent = layer.selected
@@ -2990,7 +2508,7 @@ final class PtrBranchingVisualizationTest {
 				: layer.depth > multiTick.selectedDepth
 					? 'diagnostic continuation'
 					: isFinalLayer ? 'three-tick horizon' : 'implicit continuation';
-
+		
 			const funnel = document.getElementById('multi-funnel');
 			funnel.replaceChildren();
 			const addFunnel = (label, value, total, tone = '') => {
@@ -3020,7 +2538,7 @@ final class PtrBranchingVisualizationTest {
 				addFunnel('Unique', layer.implicitEligible, layer.rawImplicitEligible, 'unique');
 				addFunnel('Retained', layer.retained, layer.implicitEligible, 'retained');
 			}
-
+		
 			const loss = value => value < 0 ? '—' : formatDecimal(value, 4);
 			const metrics = document.getElementById('multi-layer-metrics');
 			metrics.replaceChildren();
@@ -3043,7 +2561,7 @@ final class PtrBranchingVisualizationTest {
 				metrics.append(term, description);
 			}
 		}
-
+		
 		function renderMultiTick(tick) {
 			const multiTick = tick.multiTick;
 			const layers = multiTick.layers;
@@ -3052,7 +2570,7 @@ final class PtrBranchingVisualizationTest {
 			const finalFit = fitOf(finalStep?.loss ?? tick.loss);
 			document.getElementById('multi-summary').textContent = `${layers.length} tick${layers.length === 1 ? '' : 's'} explored`;
 			document.getElementById('route-summary').textContent = `${finalFit.label} · ${multiTick.productionSimulations.toLocaleString()} sims`;
-
+		
 			const width = Math.max(720, multiSvg.clientWidth || 720);
 			const height = 190;
 			const margin = 105;
@@ -3064,7 +2582,7 @@ final class PtrBranchingVisualizationTest {
 			const radius = layer => 31 + Math.min(16, Math.log2(Math.max(1, layer.simulations)) * 2.2);
 			multiSvg.setAttribute('viewBox', `0 0 ${width} ${height}`);
 			multiSvg.replaceChildren();
-
+		
 			for (let index = 1; index < layers.length; index++) {
 				const previousLayer = layers[index - 1];
 				const layer = layers[index];
@@ -3087,7 +2605,7 @@ final class PtrBranchingVisualizationTest {
 				edgeLabel.textContent = `×${expansion.toFixed(1)}`;
 				multiSvg.append(edgeLabel);
 			}
-
+		
 			layers.forEach((layer, index) => {
 				const x = xAt(index);
 				const r = radius(layer);
@@ -3120,7 +2638,7 @@ final class PtrBranchingVisualizationTest {
 					: `${layer.finishable.toLocaleString()} explicit`;
 				multiSvg.append(outcome);
 			});
-
+		
 			const layerPicker = document.getElementById('multi-layer-picker');
 			layerPicker.replaceChildren();
 			layers.forEach((layer, index) => {
@@ -3151,7 +2669,7 @@ final class PtrBranchingVisualizationTest {
 				layers[state.multiLayerIndex],
 				state.multiLayerIndex === layers.length - 1
 			);
-
+		
 			const pathList = document.getElementById('multi-path');
 			const pathTree = document.getElementById('multi-path-tree');
 			pathList.replaceChildren();
@@ -3190,7 +2708,7 @@ final class PtrBranchingVisualizationTest {
 					render();
 				});
 				pathTree.append(treeButton);
-
+		
 				const item = document.createElement('li');
 				const label = document.createElement('strong');
 				label.textContent = `Tick ${step.depth + 1}`;
@@ -3220,7 +2738,7 @@ final class PtrBranchingVisualizationTest {
 				pathList.append(item);
 			});
 		}
-
+		
 		function renderStage(tick) {
 			const stage = tick.stages[state.stageIndex];
 			document.getElementById('stage-title').textContent = stage.name;
@@ -3233,7 +2751,7 @@ final class PtrBranchingVisualizationTest {
 			if (stage.duplicates > 0) notes.push(`${stage.duplicates.toLocaleString()} merged`);
 			if (stage.finishable !== stage.outputs) notes.push(`${stage.finishable.toLocaleString()} explicit-capable`);
 			document.getElementById('stage-summary').textContent = `${progression.join(' → ')}${notes.length ? ` · ${notes.join(' · ')}` : ''}`;
-
+		
 			const fanOutEntries = Object.entries(stage.fanOut)
 				.sort((a, b) => Number(a[0]) - Number(b[0]));
 			const fanOut = fanOutEntries
@@ -3242,7 +2760,7 @@ final class PtrBranchingVisualizationTest {
 			document.getElementById('fanout').textContent = fanOutEntries.length === 1 && fanOutEntries[0][0] === '1'
 				? ''
 				: `Fan-out · ${fanOut}`;
-
+		
 			const winner = document.getElementById('winner');
 			if (stage.winner) {
 				winner.className = 'winner-box';
@@ -3253,7 +2771,7 @@ final class PtrBranchingVisualizationTest {
 					? 'No distinct selected configuration'
 					: `Winner is in search layer ${tick.depth + 1}`;
 			}
-
+		
 			const samples = document.getElementById('samples');
 			samples.replaceChildren();
 			stage.samples.filter(sample => sample !== stage.winner).forEach(sample => {
@@ -3262,7 +2780,7 @@ final class PtrBranchingVisualizationTest {
 				samples.append(item);
 			});
 		}
-
+		
 		tickInput.addEventListener('input', event => {
 			stopForManualNavigation();
 			state.tickIndex = Number(event.target.value);

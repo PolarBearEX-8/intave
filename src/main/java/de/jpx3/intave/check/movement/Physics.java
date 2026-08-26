@@ -16,6 +16,7 @@ import com.comphenix.protocol.ProtocolLibrary;
 import com.comphenix.protocol.events.PacketContainer;
 import com.comphenix.protocol.wrappers.WrappedBlockData;
 import de.jpx3.intave.IntaveControl;
+import de.jpx3.intave.IntavePlugin;
 import de.jpx3.intave.access.check.MitigationStrategy;
 import de.jpx3.intave.access.player.trust.TrustFactor;
 import de.jpx3.intave.adapter.MinecraftVersion;
@@ -44,6 +45,7 @@ import de.jpx3.intave.check.movement.physics.evaluation.SimulationEvaluator;
 import de.jpx3.intave.check.movement.physics.search.RedoSimulationSearch;
 import de.jpx3.intave.check.movement.physics.search.SimulationSearch;
 import de.jpx3.intave.check.movement.physics.search.ThreeTickSimulationSearch;
+import de.jpx3.intave.check.movement.physics.search.TickSearch;
 import de.jpx3.intave.check.movement.physics.simulator.Simulation;
 import de.jpx3.intave.check.movement.physics.simulator.Simulator;
 import de.jpx3.intave.check.movement.physics.simulator.Simulators;
@@ -53,6 +55,7 @@ import de.jpx3.intave.diagnostic.message.MessageSeverity;
 import de.jpx3.intave.diagnostic.timings.Timings;
 import de.jpx3.intave.executor.BackgroundExecutors;
 import de.jpx3.intave.executor.Synchronizer;
+import de.jpx3.intave.math.Hypot;
 import de.jpx3.intave.math.MathHelper;
 import de.jpx3.intave.module.Modules;
 import de.jpx3.intave.module.mitigate.AttackNerfStrategy;
@@ -62,6 +65,7 @@ import de.jpx3.intave.module.violation.Violation;
 import de.jpx3.intave.module.violation.ViolationContext;
 import de.jpx3.intave.packet.PacketSender;
 import de.jpx3.intave.player.FaultKicks;
+import de.jpx3.intave.player.ItemProperties;
 import de.jpx3.intave.player.collider.Colliders;
 import de.jpx3.intave.player.collider.complex.SimulationResult;
 import de.jpx3.intave.player.collider.simple.SimpleColliderResult;
@@ -141,7 +145,7 @@ public final class Physics extends Check {
     boolean detectNoSlowdown = settings.boolBy("enforce-item-slowdown", true);
     this.simulationEvaluator = new DefaultSimulationEvaluator();
 
-    SimulationSearch search = new ThreeTickSimulationSearch(resetItemUsage, detectNoSlowdown);
+    SimulationSearch search = new ThreeTickSimulationSearch(detectNoSlowdown);
     search = RedoSimulationSearch.of(search, simulationEvaluator);
 //    search = RollbackSimulationSearch.of(search, simulationEvaluator);
     this.simulationSearch = search;
@@ -200,17 +204,18 @@ public final class Physics extends Check {
 
     Timings.CHECK_PHYSICS_PROC.start();
     // simulation
-    Simulation simulation;
-
+    TickSearch tickSearch;
     SimulationEnvironment simulationEnvironment = movementData.mutableView();
 
     try {
-      simulation = simulationSearch.greedyFuzzyTickSearch(user, simulationEnvironment, simulator);
+      tickSearch = simulationSearch.greedyFuzzyTickSearch(user, simulationEnvironment, simulator);
     } catch (IllegalStateException exception) {
       user.kick("Exception while simulating movement");
       exception.printStackTrace();
       return;
     }
+
+    Simulation simulation = tickSearch.simulation();
 
     if (simulation == Simulation.invalid()) {
       user.kick("Invalid simulation result");
@@ -251,7 +256,8 @@ public final class Physics extends Check {
     movementData.assumeOccurred(simulation);
     Timings.CHECK_PHYSICS_EVAL.start();
     // evaluation
-    evaluateBestSimulation(user, simulation);
+    evaluateBestSimulation(user, tickSearch);
+    checkNoSlowdownState(user, tickSearch);
     Timings.CHECK_PHYSICS_EVAL.stop();
     Timings.CHECK_PHYSICS_PROC.stop();
     if (withRotation) {
@@ -398,7 +404,8 @@ public final class Physics extends Check {
   /**
    * This method is too big, please refactor
    */
-  private void evaluateBestSimulation(User user, Simulation simulation) {
+  private void evaluateBestSimulation(User user, TickSearch tickSearch) {
+    Simulation simulation = tickSearch.simulation();
     Player player = user.player();
     MetadataBundle meta = user.meta();
     boolean spectator = player.getGameMode() == GameMode.SPECTATOR;
@@ -784,10 +791,10 @@ public final class Physics extends Check {
 
       String message = "moved incorrectly";
       String details = "Δ" + formatDouble(distance, 6)
-        + " / \uD83D\uDD0D" + simulation.simulationCount();
+        + " / \uD83D\uDD0D" + tickSearch.simulationCount();
 
       if (user.meta().protocol().flyingPacketsCausePositionUncertainty()) {
-        details += "↧" + simulation.searchDepth();
+        details += "↧" + tickSearch.searchDepth();
       }
 
       if (movementData.forceCorrectReduce) {
@@ -1321,6 +1328,33 @@ public final class Physics extends Check {
         refreshBlock(player, position.toLocation(player.getWorld()));
       }
     });
+  }
+
+  private void checkNoSlowdownState(User user, TickSearch search) {
+    if (!resetItemUsage) {
+      return;
+    }
+
+    MetadataBundle meta = user.meta();
+    MovementMetadata movementData = meta.movement();
+    InventoryMetadata inventoryData = meta.inventory();
+
+    boolean movementSuggestsHandIsActive = search.itemUseRequired(0.001);
+    boolean packetsSuggestsHandIsActive = inventoryData.handActive();
+    if (packetsSuggestsHandIsActive && !movementSuggestsHandIsActive) {
+      boolean releaseHandConditions = Hypot.fast(movementData.offsetMotionX(), movementData.offsetMotionZ()) > 0.3 || movementData.ticksPast(TELEPORT) >= 2;
+      boolean itemIsBow = ItemProperties.isBow(meta.inventory().activeItemType()) || ItemProperties.isBow(meta.inventory().offhandItemType());
+      boolean viaVersionBlockReplacement = meta.protocol().viaVersionShieldBlockReplacement();
+      boolean ignoredSlowdown = releaseHandConditions && (!itemIsBow || (inventoryData.handActiveTicks > 3 && !viaVersionBlockReplacement));
+
+      if (ignoredSlowdown && movementData.handItemSimulationFails++ > 1) {
+        meta.inventory().releaseItemNextTick();
+
+        if (user.receives(MessageChannel.DEBUG_ITEM_RESETS)) {
+          user.player().sendMessage(IntavePlugin.prefix() + "Requesting item usage reset as " + ChatColor.RED + "movement/state discrepancy ");
+        }
+      }
+    }
   }
 
   private void refreshBlock(Player player, Location location) {

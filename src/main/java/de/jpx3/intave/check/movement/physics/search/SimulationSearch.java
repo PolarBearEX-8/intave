@@ -22,17 +22,17 @@ import java.util.List;
 import java.util.Set;
 
 public interface SimulationSearch {
-	default Simulation greedyFuzzyTickSearch(User user, SimulationEnvironment environment, Simulator simulator) {
+	default TickSearch greedyFuzzyTickSearch(User user, SimulationEnvironment environment, Simulator simulator) {
 		return tickSearch(user, environment, simulator, SimulationSearchOptions.GREEDY_FUZZY);
 	}
 
-	default Simulation greedyFullTickSearch(User user, SimulationEnvironment environment, Simulator simulator) {
+	default TickSearch greedyFullTickSearch(User user, SimulationEnvironment environment, Simulator simulator) {
 		return tickSearch(user, environment, simulator, SimulationSearchOptions.GREEDY_EXACT);
 	}
 
 	Set<Simulation> exhaustiveTickSearch(User user, SimulationEnvironment environment, Simulator simulator);
 
-	Simulation tickSearch(
+	TickSearch tickSearch(
 		User user, SimulationEnvironment movementData,
 		Simulator simulator, SimulationSearchOptions options
 	);

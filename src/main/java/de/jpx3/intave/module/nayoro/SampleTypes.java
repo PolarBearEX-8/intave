@@ -11,10 +11,7 @@
 
 package de.jpx3.intave.module.nayoro;
 
-import ac.intave.samples.share.Block;
-import ac.intave.samples.share.Hand;
-import ac.intave.samples.share.Item;
-import ac.intave.samples.share.ItemCategory;
+import ac.intave.samples.share.*;
 import com.comphenix.protocol.wrappers.EnumWrappers;
 import de.jpx3.intave.entity.size.HitboxSize;
 import de.jpx3.intave.share.BlockState;
@@ -23,10 +20,7 @@ import de.jpx3.intave.share.Direction;
 import de.jpx3.intave.share.RawVector3d;
 import org.bukkit.inventory.ItemStack;
 
-import java.util.ArrayList;
-import java.util.Map;
-import java.util.SortedMap;
-import java.util.TreeMap;
+import java.util.*;
 
 /** Converts Intave runtime values at the boundary of the samples API. */
 public final class SampleTypes {
@@ -97,6 +91,22 @@ public final class SampleTypes {
       item.type(), item.amount(), ItemCategory.valueOf(item.category().name()),
       item.glowing(), item.baseQuality(), item.enchantmentQuality()
     );
+  }
+
+  /** Converts an empty Bukkit stack to the samples API's null-as-empty representation. */
+  public static Item nullableItem(ItemStack itemStack) {
+    if (itemStack == null || itemStack.getType() == org.bukkit.Material.AIR || itemStack.getAmount() <= 0) {
+      return null;
+    }
+    return item(itemStack);
+  }
+
+  public static List<SlotUpdate> slotUpdates(Map<Integer, ItemStack> itemStacks) {
+    List<SlotUpdate> updates = new ArrayList<>(itemStacks.size());
+    itemStacks.entrySet().stream()
+      .sorted(Comparator.comparingInt(Map.Entry::getKey))
+      .forEach(entry -> updates.add(new SlotUpdate(entry.getKey(), nullableItem(entry.getValue()))));
+    return updates;
   }
 
   public static Item[] items(ItemStack[] itemStacks) {

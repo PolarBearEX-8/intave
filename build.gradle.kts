@@ -71,9 +71,9 @@ dependencies {
   testImplementation("io.netty:netty-all:4.2.15.Final")
 
   // Loaded by Libraries.setupLibraries() when the plugin starts.
-  compileOnly("ac.intave:samples:0.0.7")
+  compileOnly("ac.intave:samples:0.0.8")
   compileOnly("ac.intave:cloud-protocol:0.0.4") { isTransitive = false }
-  testImplementation("ac.intave:samples:0.0.7")
+  testImplementation("ac.intave:samples:0.0.8")
   testImplementation("ac.intave:cloud-protocol:0.0.4") { isTransitive = false }
 
   // random shit[
@@ -682,8 +682,8 @@ fun registerPaperRunTask(serverVersion: String, javaVersion: Int) {
       serverJar(File("libs/servers/paper-1.21.7-15.jar"))
     }
     downloadPlugins {
-      modrinth("viaversion", "5.9.1")
-      modrinth("viabackwards", "5.9.1")
+      modrinth("viaversion", "5.11.0")
+      modrinth("viabackwards", "5.11.0")
     }
     runDirectory(File("runs/paper_${serverVersion}-j$javaVersion"))
     jvmArgs("-Dcom.mojang.eula.agree=true")

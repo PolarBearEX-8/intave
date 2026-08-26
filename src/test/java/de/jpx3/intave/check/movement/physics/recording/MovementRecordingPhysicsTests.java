@@ -292,7 +292,7 @@ final class MovementRecordingPhysicsTests {
 			metadata.setPose(firstFrame.physicalPose());
 		}
 
-		ThreeTickSimulationSearch processor = new ThreeTickSimulationSearch(false, false);
+		ThreeTickSimulationSearch processor = new ThreeTickSimulationSearch(false);
 		List<String> lastMessages = new LinkedList<>();
 
 		for (int tick = firstPositionFrame + 1; tick < frames.size(); tick++) {
@@ -353,7 +353,7 @@ final class MovementRecordingPhysicsTests {
 				: 0;
 			Simulation simulation;
 			if (!hasPerFramePhysicalState) {
-				simulation = processor.greedyFullTickSearch(user, searchEnvironment, simulator);
+				simulation = processor.greedyFullTickSearch(user, searchEnvironment, simulator).simulation();
 			} else if (hasMovement) {
 				simulation = processor.exactFlyingPacketSearch(
 					user, searchEnvironment, simulator, precedingFlyingPackets
@@ -367,7 +367,7 @@ final class MovementRecordingPhysicsTests {
 				|| simulation.positionDifference(metadata.position()) > DIVERGED_MOTION_DISTANCE)) {
 				Simulation genericSimulation = processor.greedyFullTickSearch(
 					user, searchEnvironment, simulator
-				);
+				).simulation();
 				if (simulation == Simulation.invalid()
 					|| genericSimulation.positionDifference(metadata.position())
 					< simulation.positionDifference(metadata.position())) {
@@ -377,7 +377,7 @@ final class MovementRecordingPhysicsTests {
 			} else if (simulation == Simulation.invalid()) {
 				simulation = processor.greedyFullTickSearch(
 					user, searchEnvironment, simulator
-				);
+				).simulation();
 			}
 			if (!hasMovement) {
 				finishPositionlessTick(
