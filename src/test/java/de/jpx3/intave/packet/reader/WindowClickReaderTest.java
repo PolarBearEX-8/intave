@@ -15,7 +15,7 @@ import ac.intave.samples.event.InventoryActionEvent;
 import de.jpx3.intave.packet.reader.WindowClickReader.InventoryClickType;
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.*;
 
 final class WindowClickReaderTest {
   @Test
@@ -36,9 +36,57 @@ final class WindowClickReaderTest {
     assertAction(InventoryClickType.QUICK_CRAFT, -999, 10, InventoryActionEvent.Action.DRAG_END);
   }
 
+  @Test
+  void recreatesItemAndCountFromHashedStack() {
+    FakeItem item = new FakeItem();
+
+    Object rebuilt = WindowClickReader.recreateNativeItemStack(
+      new FakeHashedStack(item, 7, new Object()), FakeNativeItemStack.class
+    );
+
+    FakeNativeItemStack stack = (FakeNativeItemStack) rebuilt;
+    assertSame(item, stack.item);
+    assertEquals(7, stack.count);
+  }
+
+  @Test
+  void treatsHashedEmptyStackAsEmpty() {
+    assertNull(WindowClickReader.recreateNativeItemStack(
+      new FakeEmptyHashedStack(), FakeNativeItemStack.class
+    ));
+  }
+
   private static void assertAction(
     InventoryClickType type, int slot, int button, InventoryActionEvent.Action expected
   ) {
     assertEquals(expected, WindowClickReader.actionOf(type, slot, button));
+  }
+
+  private static final class FakeHashedStack {
+    private final FakeItem item;
+    private final int count;
+    private final Object components;
+
+    private FakeHashedStack(FakeItem item, int count, Object components) {
+      this.item = item;
+      this.count = count;
+      this.components = components;
+    }
+  }
+
+  private static final class FakeEmptyHashedStack {
+  }
+
+  private static final class FakeItem {
+  }
+
+  private static final class FakeNativeItemStack {
+    private final FakeItem item;
+    private final int count;
+
+    private FakeNativeItemStack(FakeItem item, int count) {
+      this.item = item;
+      this.count = count;
+    }
   }
 }
