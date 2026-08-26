@@ -21,6 +21,7 @@ import de.jpx3.intave.block.collision.Collision;
 import de.jpx3.intave.block.fluid.Fluid;
 import de.jpx3.intave.block.physics.BlockProperties;
 import de.jpx3.intave.block.tick.ShulkerBox;
+import de.jpx3.intave.block.tick.piston.PistonSlimeMovement;
 import de.jpx3.intave.block.type.BlockTypeAccess;
 import de.jpx3.intave.check.movement.physics.config.MovementConfiguration;
 import de.jpx3.intave.check.movement.physics.environment.*;
@@ -129,6 +130,8 @@ public final class MovementMetadata implements SimulationEnvironment {
   public double baseMotionX, baseMotionY, baseMotionZ; // base or last motion, exclusively for the physics check
   public double baseMotionXBeforeVelocity, baseMotionYBeforeVelocity, baseMotionZBeforeVelocity;
   private List<PostTickSimulation> postTickSimulations = Collections.emptyList();
+  private List<PistonSlimeMovement> pistonSlimeMovements = Collections.emptyList();
+  private Map<BlockPosition, ShulkerBox> shulkerBoxes = Collections.emptyMap();
   public double endMotionXOverride = Double.NaN, endMotionYOverride = Double.NaN, endMotionZOverride = Double.NaN;
   public int highestLocalRiptideLevel = 0;
   public boolean physicsResetMotionX, physicsResetMotionZ;
@@ -143,9 +146,6 @@ public final class MovementMetadata implements SimulationEnvironment {
   public double pistonHorizontalAllowance;
   public double pistonVerticalAllowance;
   public BoundingBox pistonCollisionArea;
-  public List<BlockPosition> shulkers = new ArrayList<>();
-  public Map<BlockPosition, ShulkerBox> shulkerData = new HashMap<>();
-  public Map<Integer, ShulkerBox> shulkerDataHashCodeAccess = new HashMap<>();
   // Will be set to true if the player sends a flying packet and receives server velocity later
   public boolean physicsUnpredictableVelocityExpected;
   // Jump prevention
@@ -743,19 +743,6 @@ public final class MovementMetadata implements SimulationEnvironment {
   }
 
   @Override
-  public ShulkerBox shulkerBoxAt(int posX, int posY, int posZ) {
-    if (shulkerData.isEmpty()) {
-      return null;
-    }
-    int positionHash = posX << 12 | posY << 8 | posZ;
-    ShulkerBox shulkerBox = shulkerDataHashCodeAccess.get(positionHash);
-    if (shulkerBox != null) {
-      return shulkerBox;
-    }
-    return shulkerData.get(new BlockPosition(posX, posY, posZ));
-  }
-
-  @Override
   public void activeTick(MoveMetric metric) {
     activeTracker.put(metric, ticks(metric) + 1);
     pastTracker.put(metric, 0);
@@ -913,6 +900,9 @@ public final class MovementMetadata implements SimulationEnvironment {
     if (isRealClientTick) {
       currentTick++;
       tickAmbiguousUpdates.removeIf(tau -> tau.expired(this));
+      if (!pistonSlimeMovements.isEmpty()) {
+        pistonSlimeMovements.removeIf(movement -> movement.expired(currentTick));
+      }
       worldBorder.tick();
     }
 
@@ -983,7 +973,6 @@ public final class MovementMetadata implements SimulationEnvironment {
       lastTimeJumped = System.currentTimeMillis();
     }
 
-    shulkerCleanup();
   }
 
   @Override
@@ -1045,30 +1034,6 @@ public final class MovementMetadata implements SimulationEnvironment {
   @Override
   public void setOnGroundNoBlocks(boolean onGroundNoBlocks) {
     this.onGroundNoBlocks = onGroundNoBlocks;
-  }
-
-  private void shulkerCleanup() {
-    if (!shulkerData.isEmpty()) {
-      int shulkerLimit = 2048;
-      for (Iterator<BlockPosition> iterator = shulkers.iterator(); iterator.hasNext(); ) {
-        if (shulkerLimit-- <= 0) {
-          break;
-        }
-        BlockPosition shulkerBlock = iterator.next();
-        ShulkerBox shulkerBox = shulkerData.get(shulkerBlock);
-        if (shulkerBox == null) {
-          iterator.remove();
-          continue;
-        }
-        if (shulkerBox.complete()) {
-          iterator.remove();
-          shulkerData.remove(shulkerBlock);
-          shulkerDataHashCodeAccess.remove(shulkerBox.hashCode());
-        } else if (shulkerBox.shouldTick()) {
-          shulkerBox.tick();
-        }
-      }
-    }
   }
 
   @Override
@@ -1156,6 +1121,30 @@ public final class MovementMetadata implements SimulationEnvironment {
   @Override
   public void setPostTickMotionCandidates(@NotNull List<PostTickSimulation> postTickSimulations) {
     this.postTickSimulations = new ArrayList<>(postTickSimulations);
+  }
+
+  @Override
+  public List<PistonSlimeMovement> pistonSlimeMovements() {
+    return pistonSlimeMovements.isEmpty()
+      ? Collections.emptyList()
+      : Collections.unmodifiableList(pistonSlimeMovements);
+  }
+
+  @Override
+  public void setPistonSlimeMovements(@NotNull List<PistonSlimeMovement> pistonSlimeMovements) {
+    this.pistonSlimeMovements = new ArrayList<>(pistonSlimeMovements);
+  }
+
+  @Override
+  public Map<BlockPosition, ShulkerBox> shulkerBoxes() {
+    return shulkerBoxes.isEmpty()
+      ? Collections.emptyMap()
+      : Collections.unmodifiableMap(shulkerBoxes);
+  }
+
+  @Override
+  public void setShulkerBoxes(@NotNull Map<BlockPosition, ShulkerBox> shulkerBoxes) {
+    this.shulkerBoxes = new LinkedHashMap<>(shulkerBoxes);
   }
 
   @Override

@@ -1339,9 +1339,9 @@ public final class Physics extends Check {
     MovementMetadata movementData = meta.movement();
     InventoryMetadata inventoryData = meta.inventory();
 
-    boolean movementSuggestsHandIsActive = search.itemUseRequired(0.001);
+    boolean movementProvesHandIsInactive = search.itemUseImpossible(0.001);
     boolean packetsSuggestsHandIsActive = inventoryData.handActive();
-    if (packetsSuggestsHandIsActive && !movementSuggestsHandIsActive) {
+    if (packetsSuggestsHandIsActive && movementProvesHandIsInactive) {
       boolean releaseHandConditions = Hypot.fast(movementData.offsetMotionX(), movementData.offsetMotionZ()) > 0.3 || movementData.ticksPast(TELEPORT) >= 2;
       boolean itemIsBow = ItemProperties.isBow(meta.inventory().activeItemType()) || ItemProperties.isBow(meta.inventory().offhandItemType());
       boolean viaVersionBlockReplacement = meta.protocol().viaVersionShieldBlockReplacement();

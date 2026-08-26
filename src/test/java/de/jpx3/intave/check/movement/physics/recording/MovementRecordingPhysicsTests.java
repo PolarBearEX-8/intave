@@ -30,11 +30,15 @@ import de.jpx3.intave.check.movement.physics.simulator.Simulation;
 import de.jpx3.intave.check.movement.physics.simulator.Simulator;
 import de.jpx3.intave.check.movement.physics.simulator.Simulators;
 import de.jpx3.intave.check.movement.physics.update.MotionSetUpdate;
+import de.jpx3.intave.check.movement.physics.update.PistonActionUpdate;
+import de.jpx3.intave.check.movement.physics.update.ShulkerBoxActionUpdate;
 import de.jpx3.intave.module.test.record.MoveFrame;
 import de.jpx3.intave.module.test.record.MovementFrameState;
 import de.jpx3.intave.module.test.record.MovementRecording;
 import de.jpx3.intave.module.test.record.action.Action;
+import de.jpx3.intave.module.test.record.action.PistonSlimeAction;
 import de.jpx3.intave.module.test.record.action.ReceiveVelocity;
+import de.jpx3.intave.module.test.record.action.ShulkerBoxAction;
 import de.jpx3.intave.player.attribute.Attribute;
 import de.jpx3.intave.player.collider.Colliders;
 import de.jpx3.intave.resource.Resources;
@@ -1106,6 +1110,30 @@ final class MovementRecordingPhysicsTests {
 					metadata.activeTick(EXTERNAL_VELOCITY);
 					metadata.activeTick(RECEIVED_VELOCITY_PACKET);
 					metadata.activeTick(VELOCITY);
+				}
+			} else if (action instanceof PistonSlimeAction piston) {
+				if (piston.tickRange().start() == tick) {
+					long duration = piston.tickRange().end() - piston.tickRange().start();
+					if (duration <= 0) {
+						throw new IllegalStateException("Invalid piston tick range: " + piston.tickRange());
+					}
+					PistonActionUpdate update = PistonActionUpdate.openEnded(
+						piston.direction(), piston.slimeSources(), metadata
+					);
+					update.setRunNotAfter(metadata.currentTick() + duration - 1);
+					metadata.queueTickAmbiguousUpdate(update);
+				}
+			} else if (action instanceof ShulkerBoxAction shulker) {
+				if (shulker.tickRange().start() == tick) {
+					long duration = shulker.tickRange().end() - shulker.tickRange().start();
+					if (duration <= 0) {
+						throw new IllegalStateException("Invalid shulker-box tick range: " + shulker.tickRange());
+					}
+					ShulkerBoxActionUpdate update = ShulkerBoxActionUpdate.openEnded(
+						shulker.position(), shulker.direction(), shulker.opening(), metadata
+					);
+					update.setRunNotAfter(metadata.currentTick() + duration - 1);
+					metadata.queueTickAmbiguousUpdate(update);
 				}
 			}
 		}

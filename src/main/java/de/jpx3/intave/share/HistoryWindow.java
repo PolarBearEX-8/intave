@@ -39,7 +39,9 @@ public final class HistoryWindow<T> implements Set<T> {
 
   @Override
   public boolean isEmpty() {
-    return false;
+    synchronized (monitor) {
+      return fullSize == 0;
+    }
   }
 
   @Override

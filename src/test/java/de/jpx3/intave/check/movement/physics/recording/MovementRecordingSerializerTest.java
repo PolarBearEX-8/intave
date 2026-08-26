@@ -20,11 +20,10 @@ import de.jpx3.intave.block.variant.BlockVariant;
 import de.jpx3.intave.check.movement.physics.environment.Pose;
 import de.jpx3.intave.codec.ByteBufStreamCodecs;
 import de.jpx3.intave.codec.StreamCodec;
-import de.jpx3.intave.module.test.record.MaterialVariantStore;
-import de.jpx3.intave.module.test.record.MoveFrame;
-import de.jpx3.intave.module.test.record.MovementFrameState;
-import de.jpx3.intave.module.test.record.MovementRecording;
+import de.jpx3.intave.module.test.record.*;
 import de.jpx3.intave.module.test.record.action.Action;
+import de.jpx3.intave.module.test.record.action.PistonSlimeAction;
+import de.jpx3.intave.module.test.record.action.ShulkerBoxAction;
 import de.jpx3.intave.player.attribute.Attribute;
 import de.jpx3.intave.player.attribute.AttributeModifier;
 import de.jpx3.intave.resource.Resource;
@@ -178,6 +177,49 @@ final class MovementRecordingSerializerTest {
 
 			assertEquals(state, decoded.frames().get(0).movementState());
 			assertEquals(recording, decoded);
+		} finally {
+			buffer.release();
+		}
+	}
+
+	@Test
+	void serializesPistonSlimeActions() {
+		MovementRecording recording = MovementRecording.create();
+		PistonSlimeAction action = new PistonSlimeAction(
+			Direction.UP,
+			List.of(new BlockPosition(-214, 65, 220)),
+			TickRange.betweenInclusive(65, 66)
+		);
+		recording.insertAction(action);
+
+		ByteBuf buffer = Unpooled.buffer();
+		try {
+			MovementRecording.STREAM_CODEC.encode(buffer, recording);
+			MovementRecording decoded = MovementRecording.STREAM_CODEC.decode(buffer);
+
+			assertEquals(List.of(action), decoded.actions());
+		} finally {
+			buffer.release();
+		}
+	}
+
+	@Test
+	void serializesShulkerBoxActions() {
+		MovementRecording recording = MovementRecording.create();
+		ShulkerBoxAction action = new ShulkerBoxAction(
+			new BlockPosition(-214, 65, 220),
+			Direction.EAST,
+			true,
+			TickRange.betweenInclusive(65, 66)
+		);
+		recording.insertAction(action);
+
+		ByteBuf buffer = Unpooled.buffer();
+		try {
+			MovementRecording.STREAM_CODEC.encode(buffer, recording);
+			MovementRecording decoded = MovementRecording.STREAM_CODEC.decode(buffer);
+
+			assertEquals(List.of(action), decoded.actions());
 		} finally {
 			buffer.release();
 		}

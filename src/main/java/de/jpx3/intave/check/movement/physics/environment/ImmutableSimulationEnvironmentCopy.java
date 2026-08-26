@@ -12,6 +12,8 @@
 package de.jpx3.intave.check.movement.physics.environment;
 
 import de.jpx3.intave.block.fluid.Fluid;
+import de.jpx3.intave.block.tick.ShulkerBox;
+import de.jpx3.intave.block.tick.piston.PistonSlimeMovement;
 import de.jpx3.intave.check.movement.physics.config.MovementConfiguration;
 import de.jpx3.intave.check.movement.physics.simulator.BoatSimulator.Status;
 import de.jpx3.intave.check.movement.physics.simulator.Simulation;
@@ -28,10 +30,7 @@ import org.bukkit.Material;
 import org.bukkit.util.Vector;
 import org.jetbrains.annotations.NotNull;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.EnumMap;
-import java.util.List;
+import java.util.*;
 
 final class ImmutableSimulationEnvironmentCopy implements SimulationEnvironment {
 	private final User user;
@@ -46,6 +45,8 @@ final class ImmutableSimulationEnvironmentCopy implements SimulationEnvironment 
 	private final double baseMotionX, baseMotionY, baseMotionZ;
 	private final boolean motionXReset, motionZReset;
 	private final List<PostTickSimulation> postTickSimulations;
+	private final List<PistonSlimeMovement> pistonSlimeMovements;
+	private final Map<BlockPosition, ShulkerBox> shulkerBoxes;
 	private final Vector motionMultiplier;
 	private final float rotationYaw, yawSine, yawCosine, rotationPitch;
 	private final float aiMoveSpeed, sprintAiMoveSpeed;
@@ -218,6 +219,8 @@ final class ImmutableSimulationEnvironmentCopy implements SimulationEnvironment 
 		this.clientElytraFlying = source.shouldHaveFallFlyingPose();
 		this.sleeping = source.isSleeping();
 		this.postTickSimulations = copyPostTickMotionCandidates(source.postTickMotionCandidates());
+		this.pistonSlimeMovements = new ArrayList<>(source.pistonSlimeMovements());
+		this.shulkerBoxes = new LinkedHashMap<>(source.shulkerBoxes());
 		this.mainSupportingBlockPos = source.mainSupportingBlockPos();
 		this.onGroundNoBlocks = source.onGroundNoBlocks();
 		this.activeTracker = new EnumMap<>(MoveMetric.class);
@@ -378,6 +381,30 @@ final class ImmutableSimulationEnvironmentCopy implements SimulationEnvironment 
 
 	@Override
 	public void setPostTickMotionCandidates(@NotNull List<PostTickSimulation> postTickSimulations) {
+		throw immutableCopyException();
+	}
+
+	@Override
+	public List<PistonSlimeMovement> pistonSlimeMovements() {
+		return pistonSlimeMovements.isEmpty()
+			? Collections.emptyList()
+			: Collections.unmodifiableList(pistonSlimeMovements);
+	}
+
+	@Override
+	public void setPistonSlimeMovements(@NotNull List<PistonSlimeMovement> pistonSlimeMovements) {
+		throw immutableCopyException();
+	}
+
+	@Override
+	public Map<BlockPosition, ShulkerBox> shulkerBoxes() {
+		return shulkerBoxes.isEmpty()
+			? Collections.emptyMap()
+			: Collections.unmodifiableMap(shulkerBoxes);
+	}
+
+	@Override
+	public void setShulkerBoxes(@NotNull Map<BlockPosition, ShulkerBox> shulkerBoxes) {
 		throw immutableCopyException();
 	}
 
@@ -1129,6 +1156,8 @@ final class ImmutableSimulationEnvironmentCopy implements SimulationEnvironment 
 		other.setWorldBorder(worldBorder);
 		other.setBaseMotion(baseMotionX, baseMotionY, baseMotionZ);
 		other.setPostTickMotionCandidates(copyPostTickMotionCandidates(postTickSimulations));
+		other.setPistonSlimeMovements(new ArrayList<>(pistonSlimeMovements));
+		other.setShulkerBoxes(new LinkedHashMap<>(shulkerBoxes));
 		if (motionMultiplier == null) {
 			other.resetMotionMultiplier();
 		} else {

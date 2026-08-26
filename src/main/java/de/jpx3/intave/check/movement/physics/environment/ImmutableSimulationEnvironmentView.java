@@ -12,6 +12,8 @@
 package de.jpx3.intave.check.movement.physics.environment;
 
 import de.jpx3.intave.block.fluid.Fluid;
+import de.jpx3.intave.block.tick.ShulkerBox;
+import de.jpx3.intave.block.tick.piston.PistonSlimeMovement;
 import de.jpx3.intave.check.movement.physics.config.MovementConfiguration;
 import de.jpx3.intave.check.movement.physics.simulator.BoatSimulator.Status;
 import de.jpx3.intave.check.movement.physics.simulator.Simulation;
@@ -30,6 +32,7 @@ import org.bukkit.util.Vector;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.List;
+import java.util.Map;
 
 final class ImmutableSimulationEnvironmentView implements SimulationEnvironment {
 	private final SimulationEnvironment delegate;
@@ -205,6 +208,26 @@ final class ImmutableSimulationEnvironmentView implements SimulationEnvironment 
 
 	@Override
 	public void setPostTickMotionCandidates(@NotNull List<PostTickSimulation> postTickSimulations) {
+		throw new UnsupportedOperationException("Cannot modify unmodifiable view");
+	}
+
+	@Override
+	public List<PistonSlimeMovement> pistonSlimeMovements() {
+		return delegate.pistonSlimeMovements();
+	}
+
+	@Override
+	public void setPistonSlimeMovements(@NotNull List<PistonSlimeMovement> pistonSlimeMovements) {
+		throw new UnsupportedOperationException("Cannot modify unmodifiable view");
+	}
+
+	@Override
+	public Map<BlockPosition, ShulkerBox> shulkerBoxes() {
+		return delegate.shulkerBoxes();
+	}
+
+	@Override
+	public void setShulkerBoxes(@NotNull Map<BlockPosition, ShulkerBox> shulkerBoxes) {
 		throw new UnsupportedOperationException("Cannot modify unmodifiable view");
 	}
 

@@ -14,6 +14,7 @@ package de.jpx3.intave.check.movement.physics.search;
 import de.jpx3.intave.IntavePlugin;
 import de.jpx3.intave.annotate.Immutable;
 import de.jpx3.intave.annotate.Mutable;
+import de.jpx3.intave.block.tick.BlockTickEntities;
 import de.jpx3.intave.check.movement.physics.branch.MovementSearchBranch;
 import de.jpx3.intave.check.movement.physics.branch.MovementSearchBranchers;
 import de.jpx3.intave.check.movement.physics.branch.MovementSearchInput;
@@ -473,6 +474,9 @@ public final class ThreeTickSimulationSearch implements SimulationSearch {
 			user, branchEnv, trace,
 			position, afterTickInputMotion.copy()
 		);
+		outputMotion = BlockTickEntities.tick(
+			user, branchEnv, position, outputMotion
+		);
 
 		// Entity.updateSwimming consumes this tick's sprint state during the next
 		// base tick, even when after-tick motion itself did not read sprinting.
@@ -516,6 +520,9 @@ public final class ThreeTickSimulationSearch implements SimulationSearch {
 				branch.moveConfig(),
 				position,
 				afterTickInputMotion.copy()
+			);
+			motion = BlockTickEntities.tick(
+				user, disposable, position, motion
 			);
 			// see below
 //			disposable.commitTo(environment);

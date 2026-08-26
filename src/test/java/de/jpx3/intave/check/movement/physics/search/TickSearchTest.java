@@ -86,4 +86,18 @@ final class TickSearchTest {
 		assertFalse(search.itemUseRequired(0.1));
 		assertFalse(search.itemUseImpossible(0.1));
 	}
+
+	@Test
+	void ambiguousItemUseIsNeitherRequiredNorImpossible() {
+		MovementConfiguration inactive = MovementConfiguration.blank();
+		MovementConfiguration active = inactive.withHandActive(true);
+		Map<MovementConfiguration, Double> distances = new HashMap<>();
+		distances.put(inactive, 0.01);
+		distances.put(active, 0.01);
+
+		TickSearch search = new TickSearch(Simulation.invalid(), 2, 0, distances);
+
+		assertFalse(search.itemUseRequired(0.1));
+		assertFalse(search.itemUseImpossible(0.1));
+	}
 }

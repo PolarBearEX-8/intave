@@ -121,6 +121,10 @@ public final class Simulation {
     return environment.lastPosition().add(offsetMotion());
   }
 
+  public Position postTickPosition() {
+    return environment.verifiedLastPosition().add(offsetMotion());
+  }
+
   public Motion offsetMotion() {
     return simulationResult.offsetMotion();
   }
@@ -185,7 +189,7 @@ public final class Simulation {
     SimulationEnvironment environment, double limit
   ) {
     Position lastReportedPosition = environment.lastPosition();
-    Position newPosition = environment.verifiedLastPosition().add(offsetMotion());
+    Position newPosition = postTickPosition();
     double distance = lastReportedPosition.distance(newPosition);
     return distance < limit;
   }
