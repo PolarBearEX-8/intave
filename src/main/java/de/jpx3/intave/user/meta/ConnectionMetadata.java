@@ -380,6 +380,11 @@ public final class ConnectionMetadata {
     return entitiesById.get(identifier);
   }
 
+  @Nullable
+  public Entity entityBy(Integer identifier) {
+    return entitiesById.get(identifier);
+  }
+
   public void enterEntity(Entity entity) {
     entitiesById.put(entity.entityId(), entity);
     entityIds.add(entity.entityId());

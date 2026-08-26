@@ -85,6 +85,7 @@ public final class EntityTracker extends Module {
 //  private final PeriodicTickedEntitySelector tickedEntitySelector;
 
   private final boolean NEW_POSITION_PROCESSING_1_9 = MinecraftVersions.VER1_9_0.atOrAbove();
+  private final boolean NEW_POSITION_PROCESSING_1_14 = MinecraftVersions.VER1_14_0.atOrAbove();
 
   public EntityTracker(IntavePlugin plugin) {
     this.plugin = plugin;
@@ -685,11 +686,10 @@ public final class EntityTracker extends Module {
     if (entityIdBoxed == null) {
       return;
     }
-    int entityId = entityIdBoxed;
     /* NOTE: An entity can't be created by the entityID when the entity doesn't
      gets teleported afterwards because the Bukkit location isn't specific enough */
 
-    Entity entity = entityByIdentifier(user, entityId);
+    Entity entity = entityByIdentifier(user, entityIdBoxed);
     if (entity == null) {
       return;
     }
@@ -702,13 +702,36 @@ public final class EntityTracker extends Module {
 
     MovementMetadata movement = user.meta().movement();
     double distanceBefore = entity.distanceToPlayerCache > 8 ? 10 : entity.immediateServerPosition.distance(movement.positionX, movement.positionY, movement.positionZ);
-    entity.immediateEntityMovement(packet);
+    long dx;
+    long dy;
+    long dz;
+    double divisor;
+    if (NEW_POSITION_PROCESSING_1_14) {
+      StructureModifier<Short> shorts = packet.getShorts();
+      dx = shorts.readSafely(0);
+      dy = shorts.readSafely(1);
+      dz = shorts.readSafely(2);
+      divisor = 4096d;
+    } else if (NEW_POSITION_PROCESSING_1_9) {
+      StructureModifier<Integer> integers = packet.getIntegers();
+      dx = integers.readSafely(1);
+      dy = integers.readSafely(2);
+      dz = integers.readSafely(3);
+      divisor = 4096d;
+    } else {
+      StructureModifier<Byte> bytes = packet.getBytes();
+      dx = bytes.readSafely(0);
+      dy = bytes.readSafely(1);
+      dz = bytes.readSafely(2);
+      divisor = 32d;
+    }
+    entity.applyImmediateRelativeMove(dx, dy, dz, divisor);
     double distanceAfter = distanceBefore > 8 ? 10 : entity.immediateServerPosition.distance(movement.positionX, movement.positionY, movement.positionZ);
 
     if (entity.typeData().isLivingEntity() && entity.tracingEnabled()) {
       EmptyFeedbackCallback task = () -> {
         entity.verifiedPosition = false;
-        entity.handleEntityMovement(user, packet, true);
+        entity.applyRelativeMove(dx, dy, dz, divisor);
         nayoroEntityPositionUpdate(player, entity);
       };
       FeedbackObserver tracker = entity.feedbackTracker();
@@ -718,7 +741,7 @@ public final class EntityTracker extends Module {
       }
       user.tracedPacketTickFeedback(event, task, tracker, options);
     } else {
-      entity.handleEntityMovement(user, packet, false);
+      entity.applyRelativeMove(dx, dy, dz, divisor);
       entity.clientSynchronized = false;
     }
   }
@@ -1253,6 +1276,11 @@ public final class EntityTracker extends Module {
 
   @Nullable
   public static Entity entityByIdentifier(User user, int entityID) {
+    return user.meta().connection().entityBy(entityID);
+  }
+
+  @Nullable
+  public static Entity entityByIdentifier(User user, Integer entityID) {
     return user.meta().connection().entityBy(entityID);
   }
 }
