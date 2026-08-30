@@ -50,4 +50,7 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v3
 
-      - run: ./gradlew test_${{ matrix.version }}
+      - name: Run Paper self-test
+        env:
+          MINECRAFT_VERSION: ${{ matrix.version }}
+        run: ./gradlew "testPaper${MINECRAFT_VERSION//./_}"

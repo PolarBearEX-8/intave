@@ -352,13 +352,15 @@ public final class MovementMetadata implements SimulationEnvironment {
       motionX = positionX - verifiedLastPositionX;
       motionY = positionY - verifiedLastPositionY;
       motionZ = positionZ - verifiedLastPositionZ;
+      double baseGravity = user.meta().protocol().supportsGravityAttribute()
+        ? user.meta().abilities().gravity()
+        : 0.08D;
       boolean falling = offsetMotionY() <= 0.0D;
-      if (falling && Effects.slowFallingEffectActive(player)) {
+      boolean slowFalling = falling && Effects.slowFallingEffectActive(player);
+      if (slowFalling) {
         artificialFallDistance = 0f;
-        gravity = 0.01D;
-      } else {
-        gravity = 0.08D;
       }
+      gravity = resolveGravity(baseGravity, falling, slowFalling);
       updateEntityActionStates();
       updateMovementMetaData();
     }
@@ -368,6 +370,10 @@ public final class MovementMetadata implements SimulationEnvironment {
     }
 
     recheckWebStateFromLastTick();
+  }
+
+  static double resolveGravity(double gravity, boolean falling, boolean slowFalling) {
+    return falling && slowFalling ? Math.min(gravity, 0.01D) : gravity;
   }
 
   @Override

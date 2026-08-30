@@ -23,6 +23,7 @@ public abstract class Action {
 		.subtype(ActionType.RECEIVE_VELOCITY, ReceiveVelocity.class, () -> ReceiveVelocity.STREAM_CODEC)
 		.subtype(ActionType.PISTON_SLIME, PistonSlimeAction.class, () -> PistonSlimeAction.STREAM_CODEC)
 		.subtype(ActionType.SHULKER_BOX, ShulkerBoxAction.class, () -> ShulkerBoxAction.STREAM_CODEC)
+		.subtype(ActionType.ATTACK_REDUCTION, AttackReduction.class, () -> AttackReduction.STREAM_CODEC)
 		.build();
 	public static final StreamCodec<ByteBuf, ByteBuf, List<Action>> LIST_STREAM_CODEC =
 		ByteBufStreamCodecs.listCodecOf(STREAM_CODEC);

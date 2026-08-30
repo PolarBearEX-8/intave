@@ -99,10 +99,16 @@ public final class AbilityMetadata {
       setupAttribute("player.sneaking_speed", 0.3D);
     }
     if (MinecraftVersions.VER1_20_5.atOrAbove()) {
+      setupAttribute("player.block_interaction_range", 4.5D);
+      setupAttribute("player.entity_interaction_range", 3.0D);
+      setupAttribute("generic.gravity", 0.08D);
       setupAttribute("generic.jump_strength", 0.42f);
+      setupAttribute("generic.step_height", 0.6D);
     }
     if (MinecraftVersions.VER1_21.atOrAbove()) {
       setupAttribute("generic.scale", 1.0D);
+      setupAttribute("generic.movement_efficiency", 0.0D);
+      setupAttribute("generic.water_movement_efficiency", 0.0D);
     }
   }
 
@@ -148,6 +154,63 @@ public final class AbilityMetadata {
       jumpStrengthCacheValid = true;
     }
     return jumpStrengthCache;
+  }
+
+  public double entityInteractionRange() {
+    String attributeKey = "player.entity_interaction_range";
+    if (findAttribute(attributeKey) == null) {
+      return inGameMode(GameMode.CREATIVE) ? 5.0D : 3.0D;
+    }
+
+    double value = attributeValue(attributeKey);
+    return Double.isNaN(value) ? 0.0D : Math.max(0.0D, Math.min(64.0D, value));
+  }
+
+  public double blockInteractionRange() {
+    String attributeKey = "player.block_interaction_range";
+    if (findAttribute(attributeKey) == null) {
+      return inGameMode(GameMode.CREATIVE) ? 5.0D : 4.5D;
+    }
+
+    double value = attributeValue(attributeKey);
+    return Double.isNaN(value) ? 0.0D : Math.max(0.0D, Math.min(64.0D, value));
+  }
+
+  public double gravity() {
+    String attributeKey = "generic.gravity";
+    if (findAttribute(attributeKey) == null) {
+      return 0.08D;
+    }
+
+    double value = attributeValue(attributeKey);
+    return Double.isNaN(value) ? -1.0D : Math.max(-1.0D, Math.min(1.0D, value));
+  }
+
+  public double stepHeight() {
+    String attributeKey = "generic.step_height";
+    if (findAttribute(attributeKey) == null) {
+      return 0.6D;
+    }
+
+    double value = attributeValue(attributeKey);
+    return Double.isNaN(value) ? 0.0D : Math.max(0.0D, Math.min(10.0D, value));
+  }
+
+  public double movementEfficiency() {
+    return unitIntervalAttributeValue("generic.movement_efficiency");
+  }
+
+  public double waterMovementEfficiency() {
+    return unitIntervalAttributeValue("generic.water_movement_efficiency");
+  }
+
+  private double unitIntervalAttributeValue(String attributeKey) {
+    if (findAttribute(attributeKey) == null) {
+      return 0.0D;
+    }
+
+    double value = attributeValue(attributeKey);
+    return Double.isNaN(value) ? 0.0D : Math.max(0.0D, Math.min(1.0D, value));
   }
 
   public double attributeValue(String key) {
@@ -238,6 +301,10 @@ public final class AbilityMetadata {
     return attribute;
   }
 
+  public boolean hasAttribute(String key) {
+    return findAttribute(key) != null;
+  }
+
   private static final Map<String, String> LEGACY_WRAPPED_KEY_REMAP;
   private static final Map<String, String> MODERN_WRAPPED_KEY_REMAP;
 
@@ -268,8 +335,14 @@ public final class AbilityMetadata {
     modernRemap.put("horse.jumpStrength", "jump_strength");
     modernRemap.put("horse.jump_strength", "jump_strength");
     modernRemap.put("zombie.spawnReinforcements", "spawn_reinforcements");
+    modernRemap.put("generic.gravity", "gravity");
     modernRemap.put("generic.scale", "scale");
+    modernRemap.put("generic.step_height", "step_height");
+    modernRemap.put("generic.movement_efficiency", "movement_efficiency");
+    modernRemap.put("generic.water_movement_efficiency", "water_movement_efficiency");
     modernRemap.put("player.sneaking_speed", "sneaking_speed");
+    modernRemap.put("player.block_interaction_range", "block_interaction_range");
+    modernRemap.put("player.entity_interaction_range", "entity_interaction_range");
     MODERN_WRAPPED_KEY_REMAP = ImmutableMap.copyOf(modernRemap);
   }
 
@@ -277,7 +350,7 @@ public final class AbilityMetadata {
     if (!MinecraftVersions.VER1_16_0.atOrAbove()) {
       return key;
     }
-    Map<String, String> remap = MinecraftVersions.VER1_21_3.atOrAbove()
+    Map<String, String> remap = MinecraftVersions.VER1_21_2.atOrAbove()
       ? MODERN_WRAPPED_KEY_REMAP
       : LEGACY_WRAPPED_KEY_REMAP;
     return remap.getOrDefault(key, key);

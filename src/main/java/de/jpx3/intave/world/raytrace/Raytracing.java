@@ -23,7 +23,9 @@ import de.jpx3.intave.share.RawVector3d;
 import de.jpx3.intave.user.MessageChannel;
 import de.jpx3.intave.user.User;
 import de.jpx3.intave.user.UserRepository;
+import de.jpx3.intave.user.meta.AbilityMetadata;
 import de.jpx3.intave.user.meta.MetadataBundle;
+import de.jpx3.intave.user.meta.ProtocolMetadata;
 import de.jpx3.intave.world.Particles;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
@@ -48,7 +50,35 @@ public final class Raytracing {
   }
 
   public static float reachDistanceOf(MetadataBundle meta) {
-    return meta.abilities().inGameMode(GameMode.CREATIVE) ? 5.0F : 3.0F;
+    return reachDistanceOf(meta.abilities(), meta.protocol());
+  }
+
+  static float reachDistanceOf(AbilityMetadata abilities, ProtocolMetadata protocol) {
+    float fallback = abilities.inGameMode(GameMode.CREATIVE) ? 5.0F : 3.0F;
+    if (!protocol.supportsInteractionRangeAttributes()) {
+      return fallback;
+    }
+    return (float) abilities.entityInteractionRange();
+  }
+
+  public static double blockReachDistanceOf(Player player) {
+    return blockReachDistanceOf(UserRepository.userOf(player));
+  }
+
+  public static double blockReachDistanceOf(User user) {
+    return blockReachDistanceOf(user.meta());
+  }
+
+  public static double blockReachDistanceOf(MetadataBundle meta) {
+    return blockReachDistanceOf(meta.abilities(), meta.protocol());
+  }
+
+  static double blockReachDistanceOf(AbilityMetadata abilities, ProtocolMetadata protocol) {
+    double fallback = abilities.inGameMode(GameMode.CREATIVE) ? 5.0D : 4.5D;
+    if (!protocol.supportsInteractionRangeAttributes()) {
+      return fallback;
+    }
+    return abilities.blockInteractionRange();
   }
 
   /**
@@ -134,8 +164,7 @@ public final class Raytracing {
    * Takes a entity and returns the range between the player and the entity. (Client side its called "getMouseOver" and
    * is from EntityRenderer.java)
    *
-   * @return distance the distance between the entity and the eyes of the player 0 means the player is inside of the
-   * entity -1 means the player hit outside the hitbox of the entity greater than 0 means the reach of the player
+   * @return the raytrace result; {@link Raytrace#missed()} distinguishes a miss from a hit at any legal reach distance
    */
   public static Raytrace entityRaytrace(
     Player player,
@@ -147,9 +176,9 @@ public final class Raytracing {
     EntityRaytraceBlockConstraint rayTraceBlocks
   ) {
     Timings.SERVICE_RAYTRACER_ENTITY.start();
-    double blockReachDistance = 6;
     double attackReachDistance = reachDistanceOf(player);
-    double lastReach = 10;
+    double traceDistance = Math.max(6.0D, attackReachDistance);
+    double lastReach = Raytrace.MISS_DISTANCE;
     RawVector3d lastHitVec = null;
     RawVector3d lastEyeVector = null;
 
@@ -181,9 +210,9 @@ public final class Raytracing {
 
         RawVector3d interpolatedLookVec = wrappedVectorForRotation(pitch, prevYaw, fastMath);
         RawVector3d lookVector = eyeVector.addVector(
-          interpolatedLookVec.x() * blockReachDistance,
-          interpolatedLookVec.y() * blockReachDistance,
-          interpolatedLookVec.z() * blockReachDistance
+          interpolatedLookVec.x() * traceDistance,
+          interpolatedLookVec.y() * traceDistance,
+          interpolatedLookVec.z() * traceDistance
         );
         BoundingBox hitBox = entityBoundingBox.grow(boundingBoxExpansion, boundingBoxExpansion, boundingBoxExpansion);
         if (alternativeYDifference != 0) {
@@ -200,8 +229,10 @@ public final class Raytracing {
           boolean blockRaytrace = false;
           if (rayTraceBlocks == EntityRaytraceBlockConstraint.ACCEPT_BLOCKS) {
             MovingObjectPosition blockMovingPosition = Raytracing.blockRayTrace(player.getWorld(), player, eyeVector, lookVector);
-            double distanceToBlock = blockMovingPosition == null || blockMovingPosition.hitVec == null ? 10 : eyeVector.distanceTo(blockMovingPosition.hitVec);
-            reach = distanceToBlock < distanceToEntity ? 10 : distanceToEntity;
+            double distanceToBlock = blockMovingPosition == null || blockMovingPosition.hitVec == null
+              ? Raytrace.MISS_DISTANCE
+              : eyeVector.distanceTo(blockMovingPosition.hitVec);
+            reach = distanceToBlock < distanceToEntity ? Raytrace.MISS_DISTANCE : distanceToEntity;
             blockRaytrace = true;
           } else {
             reach = distanceToEntity;
@@ -236,7 +267,7 @@ public final class Raytracing {
   }
 
   public static MovingObjectPosition blockRayTrace(Player player, Location playerLocation, Pose pose) {
-    double blockReachDistance = resolveBlockReachDistance(player.getGameMode());
+    double blockReachDistance = blockReachDistanceOf(player);
     double eyeHeight = resolvePlayerEyeHeight(player, pose);
     return blockRayTrace(player, playerLocation, playerLocation, blockReachDistance, eyeHeight, 1.0f);
   }
@@ -356,7 +387,4 @@ public final class Raytracing {
     return user.meta().movement().eyeHeight(pose);
   }
 
-  private static double resolveBlockReachDistance(GameMode gameMode) {
-    return (gameMode == GameMode.CREATIVE) ? 5.0 : 4.5;
-  }
 }

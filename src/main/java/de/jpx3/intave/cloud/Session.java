@@ -19,6 +19,8 @@ import ac.intave.cloud.protocol.listener.Serverbound;
 import ac.intave.cloud.protocol.packets.base.ServerboundKeepAlive;
 import ac.intave.cloud.protocol.packets.player.ServerboundPlayerLogin;
 import ac.intave.cloud.protocol.packets.player.ServerboundPlayerLogout;
+import ac.intave.cloud.protocol.packets.player.playtime.PlaytimeOfDay;
+import ac.intave.cloud.protocol.packets.player.violation.ViolationHistorySession;
 import ac.intave.cloud.protocol.pipeline.*;
 import de.jpx3.intave.IntaveLogger;
 import de.jpx3.intave.IntavePlugin;
@@ -48,6 +50,7 @@ import java.net.InetAddress;
 import java.security.Key;
 import java.security.PublicKey;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.LongAdder;
 import java.util.function.Consumer;
@@ -85,12 +88,26 @@ public final class Session {
 	private final Set<UUID> pendingPlayerLogouts = new HashSet<>();
 	private final Set<UUID> locallyOnlineUsers = new HashSet<>();
 	private final Map<UUID, Queue<LongFunction<? extends Packet<Serverbound>>>> pendingPlayerPackets = new HashMap<>();
+	private final Map<UUID, UUID> pendingKickRequests = new ConcurrentHashMap<>();
+	private final Map<UUID, PendingConsumer<List<ViolationHistorySession>>> violationHistoryCallbacks = new ConcurrentHashMap<>();
+	private final Map<UUID, PendingConsumer<PlaytimeOfDay[]>> playtimeCallbacks = new ConcurrentHashMap<>();
+	private final Map<UUID, PendingConsumer<String>> incidentIdCallbacks = new ConcurrentHashMap<>();
+	private final ObjectStore objectStore;
 
 
 	private final Attestations attestations = new Attestations();
 
 	public Session(CloudToken cloudToken) {
+		this(cloudToken, new ObjectStore());
+	}
+
+	public Session(CloudToken cloudToken, ObjectStore objectStore) {
 		this.cloudToken = cloudToken;
+		this.objectStore = objectStore;
+	}
+
+	public ObjectStore objectStore() {
+		return objectStore;
 	}
 
 	public void tryToConnect(Consumer<Boolean> lazyReturn) {
@@ -191,6 +208,8 @@ public final class Session {
 		pendingPlayerLogouts.clear();
 		locallyOnlineUsers.clear();
 		pendingPlayerPackets.clear();
+		pendingKickRequests.clear();
+		clearPendingCallbacks();
 	}
 
 	public synchronized void sendUserPacket(User user, LongFunction<? extends Packet<Serverbound>> packetGenerator) {
@@ -205,6 +224,48 @@ public final class Session {
 			requestPlayerId(user, userId);
 			pendingPlayerPackets.computeIfAbsent(userId, key -> new ArrayDeque<>()).add(packetGenerator);
 		}
+	}
+
+	public void registerViolationHistoryCallback(UUID requestId, Consumer<List<ViolationHistorySession>> callback) {
+		violationHistoryCallbacks.put(requestId, new PendingConsumer<>(callback));
+	}
+
+	public void registerPlaytimeCallback(UUID requestId, Consumer<PlaytimeOfDay[]> callback) {
+		playtimeCallbacks.put(requestId, new PendingConsumer<>(callback));
+	}
+
+	public void registerIncidentIdCallback(UUID requestId, Consumer<String> callback) {
+		incidentIdCallbacks.put(requestId, new PendingConsumer<>(callback));
+	}
+
+	public void rememberKickRequest(long playerId, UUID requestId) {
+		UUID playerUuid = playerUUIDBy(playerId);
+		if (playerUuid != null && requestId != null) {
+			pendingKickRequests.put(playerUuid, requestId);
+		}
+	}
+
+	public UUID consumeKickRequest(UUID playerUuid) {
+		return pendingKickRequests.remove(playerUuid);
+	}
+
+	public void completeViolationHistory(UUID requestId, List<ViolationHistorySession> sessions) {
+		complete(violationHistoryCallbacks, requestId, sessions);
+	}
+
+	public void completePlaytime(UUID requestId, PlaytimeOfDay[] playtime) {
+		complete(playtimeCallbacks, requestId, playtime);
+	}
+
+	public void completeIncidentId(UUID requestId, String incidentId) {
+		complete(incidentIdCallbacks, requestId, incidentId);
+	}
+
+	public void garbageCollectCallbacks() {
+		long now = System.currentTimeMillis();
+		violationHistoryCallbacks.entrySet().removeIf(entry -> entry.getValue().expired(now));
+		playtimeCallbacks.entrySet().removeIf(entry -> entry.getValue().expired(now));
+		incidentIdCallbacks.entrySet().removeIf(entry -> entry.getValue().expired(now));
 	}
 
 	public synchronized void announceUser(User user) {
@@ -321,6 +382,8 @@ public final class Session {
 	}
 
 	public void close() {
+		pendingKickRequests.clear();
+		clearPendingCallbacks();
 		if (channel != null) {
 			channel.close();
 		}
@@ -403,11 +466,11 @@ public final class Session {
 	}
 
 	public synchronized @NotNull User userById(long playerId) {
-		UUID userId = userIdByPlayerId(playerId);
+		UUID userId = playerUUIDBy(playerId);
 		return userId == null ? UserRepository.fallback() : UserRepository.userOf(userId);
 	}
 
-	public synchronized UUID userIdByPlayerId(long playerId) {
+	public synchronized UUID playerUUIDBy(long playerId) {
 		return playerIdToUser.get(playerId);
 	}
 
@@ -552,12 +615,32 @@ public final class Session {
 	}
 
 	private void notifyShutdownSubscribers() {
+		clearPendingCallbacks();
 		List<Consumer<Session>> subscribers;
 		synchronized (this) {
 			subscribers = new ArrayList<>(shutdownSubscribers);
 			shutdownSubscribers.clear();
 		}
 		subscribers.forEach(subscriber -> subscriber.accept(this));
+	}
+
+	private void clearPendingCallbacks() {
+		pendingKickRequests.clear();
+		violationHistoryCallbacks.clear();
+		playtimeCallbacks.clear();
+		incidentIdCallbacks.clear();
+	}
+
+	private static <T> void complete(
+		Map<UUID, PendingConsumer<T>> callbacks, UUID requestId, T value
+	) {
+		if (requestId == null) {
+			return;
+		}
+		PendingConsumer<T> pending = callbacks.remove(requestId);
+		if (pending != null && !pending.expired(System.currentTimeMillis())) {
+			BackgroundExecutors.execute(() -> pending.accept(value));
+		}
 	}
 
 	private String endpoint() {

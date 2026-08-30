@@ -25,6 +25,7 @@ import de.jpx3.intave.check.movement.physics.environment.Pose;
 import de.jpx3.intave.codec.ByteBufStreamCodecs;
 import de.jpx3.intave.codec.StreamCodec;
 import de.jpx3.intave.module.test.record.action.Action;
+import de.jpx3.intave.module.test.record.action.AttackReduction;
 import de.jpx3.intave.module.test.record.action.ReceiveVelocity;
 import de.jpx3.intave.player.attribute.Attribute;
 import de.jpx3.intave.resource.Resource;
@@ -115,6 +116,12 @@ public final class MovementRecording {
 
 	public void insertAction(Action action) {
 		actions.add(action);
+	}
+
+	/** Records one reduction before the movement frame that will be appended next. */
+	public synchronized void recordAttackReduction() {
+		long tick = ticks();
+		actions.add(new AttackReduction(TickRange.betweenExclusive(tick, tick + 1)));
 	}
 
 	/**

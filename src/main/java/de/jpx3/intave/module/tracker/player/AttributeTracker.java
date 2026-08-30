@@ -46,7 +46,7 @@ public final class AttributeTracker extends Module {
     AbilityMetadata abilities = user.meta().abilities();
     MovementMetadata movement = user.meta().movement();
     String attributeKey = attribute.getAttributeKey();
-    if (abilities.findAttribute(attributeKey) != null) {
+    if (abilities.hasAttribute(attributeKey)) {
       Attribute intaveAttribute = Attribute.fromProtocolLib(attribute);
       List<AttributeModifier> intaveAttributes = abilities.modifiersOf(intaveAttribute);
       intaveAttributes.clear();

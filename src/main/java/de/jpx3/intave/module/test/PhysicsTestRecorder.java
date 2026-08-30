@@ -163,6 +163,17 @@ public final class PhysicsTestRecorder extends Module {
 		}
 	}
 
+	/** Captures one attack-induced client motion reduction between movement frames. */
+	public void recordAttackReduction(User user) {
+		MovementRecording manualRecording = recordingSessionOf(user);
+		if (manualRecording != null) {
+			manualRecording.recordAttackReduction();
+		}
+		if (updateAutomaticEligibility(user)) {
+			automaticRecording.get(user).recordAttackReduction();
+		}
+	}
+
 	public static final class VelocityCapture {
 		private final MovementRecording manualRecording;
 		private final MovementRecording.VelocityToken manualVelocity;

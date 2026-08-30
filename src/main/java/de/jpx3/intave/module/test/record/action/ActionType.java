@@ -19,7 +19,8 @@ import org.jetbrains.annotations.NotNull;
 public enum ActionType {
 	RECEIVE_VELOCITY,
 	PISTON_SLIME,
-	SHULKER_BOX
+	SHULKER_BOX,
+	ATTACK_REDUCTION
 
 	;
 	public final static StreamCodec<ByteBuf, ByteBuf, @NotNull ActionType> STREAM_CODEC = ByteBufStreamCodecs.STRING.beforeAndAfter(

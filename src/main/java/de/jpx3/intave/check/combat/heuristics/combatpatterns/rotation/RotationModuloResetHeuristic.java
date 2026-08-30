@@ -100,7 +100,7 @@ public final class RotationModuloResetHeuristic extends ClassicHeuristic<Rotatio
       movementData.rotationPitch,
       0.1f
     );
-    return raytraceTraceResult.reach() != 10;
+    return !raytraceTraceResult.missed();
   }
 
   public static final class RotationModuloResetHeuristicMeta extends CheckCustomMetadata {

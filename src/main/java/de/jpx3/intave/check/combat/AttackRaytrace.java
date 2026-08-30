@@ -573,7 +573,7 @@ public final class AttackRaytrace extends MetaCheck<AttackRaytrace.AttackRaytrac
     User user, Entity entity, boolean currentPosition) {
     Player player = user.player();
     MetadataBundle meta = user.meta();
-    double minReach = 10;
+    double minReach = Raytrace.MISS_DISTANCE;
     HistoryWindow<Entity.EntityPositionContext> history = entity.positionHistory;
     int maximumPendingFeedbackPackets =
       trustFactorSetting("pending-allowance", player)
@@ -1007,7 +1007,7 @@ public final class AttackRaytrace extends MetaCheck<AttackRaytrace.AttackRaytrac
      */
     public static RaytraceResult of(Raytrace raytrace, double limit) {
       double reach = raytrace.reach();
-      if (reach == 10) {
+      if (raytrace.missed()) {
         return MISS;
       } else if (reach > limit) {
         return REACH;

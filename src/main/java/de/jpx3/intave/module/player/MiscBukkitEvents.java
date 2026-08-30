@@ -47,8 +47,11 @@ public final class MiscBukkitEvents extends Module {
   @BukkitEventSubscription
   public void on(PlayerJoinEvent join) {
     Player player = join.getPlayer();
-    boolean hasNotificationPermission = BukkitPermissionCheck.permissionCheck(player, "intave.command") && !BukkitPermissionCheck.permissionCheck(player, "intave.command.noupdate");
-    if (!hasNotificationPermission) {
+    boolean isIntaveAdministrator = BukkitPermissionCheck.permissionCheck(player, "intave.command");
+    if (!isIntaveAdministrator) {
+      return;
+    }
+    if (BukkitPermissionCheck.permissionCheck(player, "intave.command.noupdate")) {
       return;
     }
     String currentVersion = IntavePlugin.fullVersion();

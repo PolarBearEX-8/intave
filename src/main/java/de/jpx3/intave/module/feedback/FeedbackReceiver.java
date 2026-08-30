@@ -34,11 +34,16 @@ public final class FeedbackReceiver extends Module {
   private static final boolean USE_PING_PACKETS = MinecraftVersions.VER1_17_0.atOrAbove();
   private static final long TIMEOUT = TimeUnit.SECONDS.toMillis(8);
   private static final long TIMEOUT_KICK = TimeUnit.SECONDS.toMillis(40);
-  private static final long CHECK_TIMEOUT_KICK = TIMEOUT_KICK / 4;
+  private static final long CHECK_TIMEOUT_KICK_TICKS = 20 * 10;
 
   public FeedbackReceiver(IntavePlugin plugin) {
     int taskId = plugin.getServer().getScheduler()
-      .scheduleAsyncRepeatingTask(plugin, this::checkTransactionTimeout, CHECK_TIMEOUT_KICK, CHECK_TIMEOUT_KICK);
+      .scheduleAsyncRepeatingTask(
+        plugin,
+        this::checkTransactionTimeout,
+        CHECK_TIMEOUT_KICK_TICKS,
+        CHECK_TIMEOUT_KICK_TICKS
+      );
     TaskTracker.begun(taskId);
 
     int taskId2 = plugin.getServer().getScheduler()

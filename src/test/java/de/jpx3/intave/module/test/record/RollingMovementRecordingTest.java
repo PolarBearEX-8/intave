@@ -13,12 +13,14 @@ package de.jpx3.intave.module.test.record;
 
 import de.jpx3.intave.adapter.MinecraftVersions;
 import de.jpx3.intave.block.cache.MockFullBlockStaticPlane;
+import de.jpx3.intave.module.test.record.action.AttackReduction;
 import de.jpx3.intave.module.test.record.action.ReceiveVelocity;
 import de.jpx3.intave.share.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -101,6 +103,23 @@ final class RollingMovementRecordingTest {
 		ReceiveVelocity rebased = (ReceiveVelocity) second.actions().get(0);
 		assertEquals(TickRange.betweenExclusive(0, 3), rebased.tickRange());
 		assertEquals(new Motion(1, 2, 3), rebased.motion());
+	}
+
+	@Test
+	void reductionAtSegmentLimitBelongsToTheNextFrame() {
+		RollingMovementRecording rolling = rolling(3, 1, 0);
+		insert(rolling, 0);
+		insert(rolling, 1);
+		insert(rolling, 2);
+
+		rolling.recordAttackReduction();
+		insert(rolling, 3);
+
+		assertEquals(2, rolling.activeFrameCount());
+		assertEquals(
+			List.of(new AttackReduction(TickRange.betweenExclusive(1, 2))),
+			rolling.activeRecording().actions()
+		);
 	}
 
 	@Test

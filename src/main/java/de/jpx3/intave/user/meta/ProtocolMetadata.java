@@ -259,6 +259,26 @@ public final class ProtocolMetadata {
     return protocolVersion >= VER_1_20;
   }
 
+  public boolean supportsInteractionRangeAttributes() {
+    return protocolVersion >= VER_1_20_5;
+  }
+
+  public boolean supportsGravityAttribute() {
+    return protocolVersion >= VER_1_20_5;
+  }
+
+  public boolean supportsStepHeightAttribute() {
+    return protocolVersion >= VER_1_20_5;
+  }
+
+  public boolean supportsMovementEfficiencyAttribute() {
+    return protocolVersion >= VER_1_21;
+  }
+
+  public boolean supportsWaterMovementEfficiencyAttribute() {
+    return protocolVersion >= VER_1_21;
+  }
+
   public boolean clientSpeculativeBlocks() {
     return protocolVersion >= VER_1_19_2;
   }

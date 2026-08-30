@@ -21,6 +21,7 @@ import de.jpx3.intave.adapter.MinecraftVersions;
 import de.jpx3.intave.check.combat.Heuristics;
 import de.jpx3.intave.executor.Synchronizer;
 import de.jpx3.intave.module.Module;
+import de.jpx3.intave.module.Modules;
 import de.jpx3.intave.module.linker.bukkit.BukkitEventSubscription;
 import de.jpx3.intave.module.linker.packet.ListenerPriority;
 import de.jpx3.intave.module.linker.packet.PacketSubscription;
@@ -123,6 +124,7 @@ public final class AttackDispatcher extends Module {
         movementData.activeTick(ATTACK_REDUCE);
         if (movementData.reduceTicks == 0 || !limitedToOneAttack) {
           movementData.reduceTicks++;
+          Modules.physicsTestRecorder().recordAttackReduction(user);
         }
       }
       FakePlayer fakePlayer = attackData.fakePlayer();

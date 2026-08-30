@@ -28,7 +28,7 @@ public abstract class Simulator {
     User user, SimulationEnvironment environment,
     MovementConfiguration config
   ) {
-    environment.setStepHeight(stepHeight());
+    environment.setStepHeight(stepHeight(user));
 
     /*
      * Pre-tick
@@ -38,7 +38,7 @@ public abstract class Simulator {
 
     Simulator tickSimulator = Simulators.selectFor(environment);
     environment.setSimulator(tickSimulator);
-    environment.setStepHeight(tickSimulator.stepHeight());
+    environment.setStepHeight(tickSimulator.stepHeight(user));
 
     /*
      * Tick
@@ -103,13 +103,13 @@ public abstract class Simulator {
     // receive new packet
     environment.updateMovement(sentPosition, sentRotation);
 
-    environment.setStepHeight(stepHeight());
+    environment.setStepHeight(stepHeight(user));
     Motion afterPreTick = simulatePreTick(user, environment.mutableBaseMotionCopy(), environment);
     environment.setBaseMotion(afterPreTick);
 
     Simulator nextSimulator = Simulators.selectFor(environment);
     environment.setSimulator(nextSimulator);
-    environment.setStepHeight(nextSimulator.stepHeight());
+    environment.setStepHeight(nextSimulator.stepHeight(user));
     return nextSimulator;
   }
 
@@ -152,7 +152,7 @@ public abstract class Simulator {
     double predictedX, double predictedY, double predictedZ
   );
 
-  public float stepHeight() {
+  public float stepHeight(User user) {
     return 0.6f;
   }
 

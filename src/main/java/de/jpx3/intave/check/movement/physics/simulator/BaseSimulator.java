@@ -380,18 +380,9 @@ class BaseSimulator extends Simulator {
     float moveForward, float moveStrafe,
     float yawSine, float yawCosine
   ) {
-    Player player = user.player();
-    float friction = 0.02F;
-    float depthStrider = Enchantments.resolveDepthStriderModifier(player);
-    if (depthStrider > 3.0F) {
-      depthStrider = 3.0F;
-    }
-    if (!environment.lastOnGround()) {
-      depthStrider *= 0.5F;
-    }
-    if (depthStrider > 0.0F) {
-      friction += (environment.aiMoveSpeed(sprinting) - friction) * depthStrider / 3.0F;
-    }
+    float friction = interpolatedWaterFriction(
+      user, environment, 0.02F, environment.aiMoveSpeed(sprinting)
+    );
     performRelativeMoveSimulationOfState(
       context, friction, yawSine, yawCosine, moveForward, moveStrafe);
   }
@@ -641,7 +632,9 @@ class BaseSimulator extends Simulator {
       && !meta.abilities().flying()
       && !environment.shouldHaveFallFlyingPose()) {
       int soulSandModifier = Enchantments.resolveSoulSpeedModifier(player);
-      if (soulSandModifier == 0 || !environment.blockOnPositionSoulSpeedAffected()) {
+      boolean movementEfficiencyAttribute = clientData.supportsMovementEfficiencyAttribute()
+        && meta.abilities().hasAttribute("generic.movement_efficiency");
+      if (movementEfficiencyAttribute || soulSandModifier == 0 || !environment.blockOnPositionSoulSpeedAffected()) {
         float speedFactor = environment.blockSpeedFactor();
         motion.motionX *= speedFactor;
         motion.motionZ *= speedFactor;
@@ -685,17 +678,6 @@ class BaseSimulator extends Simulator {
     );
   }
 
-  private boolean collidedWithShapeMovingFrom(
-    User user,
-    SimulationEnvironment environment,
-    Position from, Position to,
-    BlockShape collisionShape
-  ) {
-    BoundingBox fromBox = BoundingBox.fromPosition(user, environment, from);
-    Motion move = to.subtractToMotion(from);
-    return fromBox.collidedAlongVector(move, collisionShape);
-  }
-
   private void simulateWaterAfter(
     User user,
     SimulationEnvironment environment,
@@ -712,13 +694,9 @@ class BaseSimulator extends Simulator {
     } else {
       motionXZMultiplier = 0.8f;
     }
-    float depthStriderMultiplier = Math.min(3.0f, Enchantments.resolveDepthStriderModifier(player));
-    if (!environment.lastOnGround()) { // wrong?
-      depthStriderMultiplier *= 0.5F;
-    }
-    if (depthStriderMultiplier > 0.0F) {
-      motionXZMultiplier += (0.54600006F - motionXZMultiplier) * depthStriderMultiplier / 3.0F;
-    }
+    motionXZMultiplier = interpolatedWaterFriction(
+      user, environment, motionXZMultiplier, 0.54600006F
+    );
     if (Effects.dolphinEffectActive(player)) {
       motionXZMultiplier = 0.96F;
     }
@@ -753,6 +731,36 @@ class BaseSimulator extends Simulator {
         motion.motionY = 0.30000001192092896D;
       }
     }
+  }
+
+  private float interpolatedWaterFriction(
+    User user,
+    SimulationEnvironment environment,
+    float currentValue,
+    float efficientValue
+  ) {
+    MetadataBundle meta = user.meta();
+    if (meta.protocol().supportsWaterMovementEfficiencyAttribute()
+      && meta.abilities().hasAttribute("generic.water_movement_efficiency")) {
+      float efficiency = (float) meta.abilities().waterMovementEfficiency();
+      if (!environment.lastOnGround()) {
+        efficiency *= 0.5F;
+      }
+      return efficiency > 0.0F
+        ? currentValue + (efficientValue - currentValue) * efficiency
+        : currentValue;
+    }
+
+    float depthStrider = Enchantments.resolveDepthStriderModifier(user.player());
+    if (depthStrider > 3.0F) {
+      depthStrider = 3.0F;
+    }
+    if (!environment.lastOnGround()) {
+      depthStrider *= 0.5F;
+    }
+    return depthStrider > 0.0F
+      ? currentValue + (efficientValue - currentValue) * depthStrider / 3.0F
+      : currentValue;
   }
 
   private void simulateLavaAfter(
@@ -901,5 +909,13 @@ class BaseSimulator extends Simulator {
           predictedX, predictedY, predictedZ
         ), setbackTicks, (environment.ticksPast(EXTERNAL_VELOCITY) > 16)
       );
+  }
+
+  @Override
+  public float stepHeight(User user) {
+    if (!user.meta().protocol().supportsStepHeightAttribute()) {
+      return super.stepHeight(user);
+    }
+    return (float) user.meta().abilities().stepHeight();
   }
 }

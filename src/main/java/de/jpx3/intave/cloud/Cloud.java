@@ -13,6 +13,14 @@ package de.jpx3.intave.cloud;
 
 import ac.intave.cloud.protocol.Packet;
 import ac.intave.cloud.protocol.listener.Serverbound;
+import ac.intave.cloud.protocol.packets.ServerboundCommand;
+import ac.intave.cloud.protocol.packets.ServerboundRequestTrustfactor;
+import ac.intave.cloud.protocol.packets.base.ServerboundIncidentIdRequest;
+import ac.intave.cloud.protocol.packets.player.ServerboundRequestPlaytime;
+import ac.intave.cloud.protocol.packets.player.ServerboundPlayerKicked;
+import ac.intave.cloud.protocol.packets.player.ServerboundViolationHistoryRequest;
+import ac.intave.cloud.protocol.packets.player.playtime.PlaytimeOfDay;
+import ac.intave.cloud.protocol.packets.player.violation.ViolationHistorySession;
 import ac.intave.cloud.protocol.packets.sampling.ServerboundPassPhysicsRecording;
 import ac.intave.cloud.protocol.packets.sampling.ServerboundPassSample;
 import de.jpx3.intave.IntaveAccessor;
@@ -34,7 +42,10 @@ import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 
 import java.nio.ByteBuffer;
+import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
+import java.util.function.Consumer;
 import java.util.function.LongFunction;
 
 @HighOrderService
@@ -42,6 +53,7 @@ public final class Cloud {
 	// later
 	private volatile Session session;
 	private volatile int reconnectAttempts = 0;
+	private final ObjectStore objectStore = new ObjectStore();
 
 	private CloudConfig cloudConfig;
 	private int taskId;
@@ -49,6 +61,12 @@ public final class Cloud {
 	private volatile boolean shuttingDown;
 
 	public void init() {
+		try {
+			objectStore.initialize();
+		} catch (Exception exception) {
+			throw new IllegalStateException("Unable to initialize the cloud object store", exception);
+		}
+		ShutdownTasks.add(objectStore::shutdown);
 		setupKeepAliveTick();
 	}
 
@@ -87,7 +105,7 @@ public final class Cloud {
 		if (cloudToken == null) {
 			throw new IllegalArgumentException("Shard cannot be null");
 		}
-		Session session = new Session(cloudToken);
+		Session session = new Session(cloudToken, objectStore);
 		session.tryToConnect(success -> {
 			if (success) {
 				if (shuttingDown) {
@@ -98,7 +116,7 @@ public final class Cloud {
 				session.subscribeToStarted(unused -> {
 					reconnectAttempts = 0;
 					if (lastAttemptFailed) {
-						IntaveLogger.logger().info("Successfully reconnected to " + cloudToken);
+						IntaveLogger.logger().info("Successfully reconnected to cloud");
 						lastAttemptFailed = false;
 					}
 					setTrustAndStorage();
@@ -193,6 +211,69 @@ public final class Cloud {
 		});
 	}
 
+	public void requestViolationHistory(User user, Consumer<List<ViolationHistorySession>> callback) {
+		Objects.requireNonNull(callback, "callback");
+		if (!user.hasPlayer()) {
+			return;
+		}
+		UUID requestId = UUID.randomUUID();
+		BackgroundExecutors.execute(() -> {
+			Session target = session;
+			if (target != null) {
+				target.registerViolationHistoryCallback(requestId, callback);
+				target.sendUserPacket(user, id -> new ServerboundViolationHistoryRequest(id, requestId));
+			}
+		});
+	}
+
+	public void requestPlaytime(User user, Consumer<PlaytimeOfDay[]> callback) {
+		Objects.requireNonNull(callback, "callback");
+		if (!user.hasPlayer()) {
+			return;
+		}
+		UUID requestId = UUID.randomUUID();
+		BackgroundExecutors.execute(() -> {
+			Session target = session;
+			if (target != null) {
+				target.registerPlaytimeCallback(requestId, callback);
+				target.sendUserPacket(user, id -> new ServerboundRequestPlaytime(id, requestId));
+			}
+		});
+	}
+
+	public void requestIncidentId(User user, Consumer<String> callback) {
+		Objects.requireNonNull(callback, "callback");
+		if (!user.hasPlayer()) {
+			return;
+		}
+		UUID requestId = UUID.randomUUID();
+		BackgroundExecutors.execute(() -> {
+			Session target = session;
+			if (target != null) {
+				target.registerIncidentIdCallback(requestId, callback);
+				target.sendUserPacket(user, id -> new ServerboundIncidentIdRequest(id, requestId));
+			}
+		});
+	}
+
+	public void requestTrustfactor(User user) {
+		sendPlayerPacket(user, ServerboundRequestTrustfactor::new);
+	}
+
+	public boolean sendCommand(User user, String command) {
+		if (!user.hasPlayer()) {
+			return false;
+		}
+		Session target = session;
+		if (target == null || !target.canSend(ServerboundCommand.class)) {
+			return false;
+		}
+		BackgroundExecutors.execute(() ->
+			target.sendUserPacket(user, playerId -> new ServerboundCommand(playerId, command))
+		);
+		return true;
+	}
+
 	public void playerLogin(Player player) {
 		User user = UserRepository.userOf(player);
 		Session target = session;
@@ -212,8 +293,21 @@ public final class Cloud {
 		}
 	}
 
-	private void heartbeat() {
+	public void playerKicked(Player player, String reason) {
+		User user = UserRepository.userOf(player);
 		Session target = session;
+		UUID requestId = target == null ? null : target.consumeKickRequest(player.getUniqueId());
+		UUID finalRequestId = requestId == null ? UUID.randomUUID() : requestId;
+		String finalReason = reason == null ? "" : reason;
+		sendPlayerPacket(user, id -> new ServerboundPlayerKicked(id, finalReason, finalRequestId));
+	}
+
+	private void heartbeat() {
+		objectStore.garbageCollect();
+		Session target = session;
+		if (target != null) {
+			target.garbageCollectCallbacks();
+		}
 		if (target == null || !target.active()) {
 			return;
 		}

@@ -13,7 +13,10 @@ package de.jpx3.intave.module.test.record;
 
 import de.jpx3.intave.block.variant.BlockVariant;
 import de.jpx3.intave.module.test.record.action.Action;
+import de.jpx3.intave.module.test.record.action.AttackReduction;
+import de.jpx3.intave.module.test.record.action.PistonSlimeAction;
 import de.jpx3.intave.module.test.record.action.ReceiveVelocity;
+import de.jpx3.intave.module.test.record.action.ShulkerBoxAction;
 import de.jpx3.intave.player.attribute.Attribute;
 import de.jpx3.intave.share.BlockPosition;
 import de.jpx3.intave.share.Position;
@@ -111,19 +114,49 @@ public final class MovementRecordingWindow {
 	private static List<Action> rebaseActions(List<Action> source, int fromInclusive, int toExclusive) {
 		List<Action> actions = new ArrayList<>();
 		for (Action action : source) {
-			if (!(action instanceof ReceiveVelocity)) {
-				throw new IllegalStateException("Unsupported movement recording action " + action.type());
-			}
-			ReceiveVelocity velocity = (ReceiveVelocity) action;
-			TickRange range = velocity.tickRange();
+			TickRange range = tickRangeOf(action);
 			long clippedStart = Math.max(range.start(), fromInclusive);
 			long clippedEnd = Math.min(range.end(), toExclusive);
 			if (clippedStart >= clippedEnd) {
 				continue;
 			}
-			actions.add(new ReceiveVelocity(velocity.motion().copy(), TickRange.betweenExclusive(clippedStart - fromInclusive, clippedEnd - fromInclusive)));
+			TickRange rebased = TickRange.betweenExclusive(
+				clippedStart - fromInclusive, clippedEnd - fromInclusive
+			);
+			if (action instanceof ReceiveVelocity) {
+				ReceiveVelocity velocity = (ReceiveVelocity) action;
+				actions.add(new ReceiveVelocity(velocity.motion().copy(), rebased));
+			} else if (action instanceof PistonSlimeAction) {
+				PistonSlimeAction piston = (PistonSlimeAction) action;
+				actions.add(new PistonSlimeAction(piston.direction(), piston.slimeSources(), rebased));
+			} else if (action instanceof ShulkerBoxAction) {
+				ShulkerBoxAction shulker = (ShulkerBoxAction) action;
+				actions.add(new ShulkerBoxAction(
+					shulker.position(), shulker.direction(), shulker.opening(), rebased
+				));
+			} else if (action instanceof AttackReduction) {
+				actions.add(new AttackReduction(rebased));
+			} else {
+				throw new IllegalStateException("Unsupported movement recording action " + action.type());
+			}
 		}
 		return actions;
+	}
+
+	private static TickRange tickRangeOf(Action action) {
+		if (action instanceof ReceiveVelocity) {
+			return ((ReceiveVelocity) action).tickRange();
+		}
+		if (action instanceof PistonSlimeAction) {
+			return ((PistonSlimeAction) action).tickRange();
+		}
+		if (action instanceof ShulkerBoxAction) {
+			return ((ShulkerBoxAction) action).tickRange();
+		}
+		if (action instanceof AttackReduction) {
+			return ((AttackReduction) action).tickRange();
+		}
+		throw new IllegalStateException("Unsupported movement recording action " + action.type());
 	}
 
 	private static Position copy(Position position) {

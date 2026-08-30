@@ -36,6 +36,7 @@ import de.jpx3.intave.module.test.record.MoveFrame;
 import de.jpx3.intave.module.test.record.MovementFrameState;
 import de.jpx3.intave.module.test.record.MovementRecording;
 import de.jpx3.intave.module.test.record.action.Action;
+import de.jpx3.intave.module.test.record.action.AttackReduction;
 import de.jpx3.intave.module.test.record.action.PistonSlimeAction;
 import de.jpx3.intave.module.test.record.action.ReceiveVelocity;
 import de.jpx3.intave.module.test.record.action.ShulkerBoxAction;
@@ -333,7 +334,7 @@ final class MovementRecordingPhysicsTests {
 				hasMovement, hasRotation
 			);
 			Simulator simulator = Simulators.selectFor(metadata);
-			metadata.stepHeight = simulator.stepHeight();
+			metadata.stepHeight = simulator.stepHeight(user);
 			metadata.treatThisFlyPacketAsMovePacket = false;
 			if (!hasMovement && (!hasPerFramePhysicalState
 				|| framesUntilNextPosition(frames, tick) <= 2)) {
@@ -345,7 +346,7 @@ final class MovementRecordingPhysicsTests {
 			metadata.setBaseMotion(preTickMotion);
 			simulator = Simulators.selectFor(metadata);
 			metadata.setSimulator(simulator);
-			metadata.stepHeight = simulator.stepHeight();
+			metadata.stepHeight = simulator.stepHeight(user);
 			preparePostTickMotionCandidatesForSearch(user, metadata, simulator, previousBaseMotion, preTickMotion);
 
 			SimulationEnvironment searchEnvironment = metadata.mutableView();
@@ -1090,6 +1091,7 @@ final class MovementRecordingPhysicsTests {
 		MovementMetadata metadata,
 		int tick
 	) {
+		int recordedAttackReductions = 0;
 		for (Action action : actions) {
 			if (action instanceof ReceiveVelocity velocity) {
 				if (velocity.tickRange().start() == tick) {
@@ -1135,7 +1137,24 @@ final class MovementRecordingPhysicsTests {
 					update.setRunNotAfter(metadata.currentTick() + duration - 1);
 					metadata.queueTickAmbiguousUpdate(update);
 				}
+			} else if (action instanceof AttackReduction reduction) {
+				if (reduction.tickRange().start() == tick) {
+					long duration = reduction.tickRange().end() - reduction.tickRange().start();
+					if (duration != 1) {
+						throw new IllegalStateException(
+							"Invalid attack-reduction tick range: " + reduction.tickRange()
+						);
+					}
+					recordedAttackReductions++;
+				}
 			}
+		}
+		if (recordedAttackReductions > 0) {
+			metadata.restoreRecordedCombatState(
+				Math.max(metadata.reduceTicks(), recordedAttackReductions),
+				0,
+				metadata.ticksPast(ENTITY_USE)
+			);
 		}
 	}
 

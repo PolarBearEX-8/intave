@@ -14,6 +14,7 @@ package de.jpx3.intave.module.test.record;
 import de.jpx3.intave.adapter.MinecraftVersions;
 import de.jpx3.intave.block.cache.MockFullBlockStaticPlane;
 import de.jpx3.intave.module.test.record.action.Action;
+import de.jpx3.intave.module.test.record.action.AttackReduction;
 import de.jpx3.intave.module.test.record.action.ReceiveVelocity;
 import de.jpx3.intave.player.attribute.Attribute;
 import de.jpx3.intave.resource.Resource;
@@ -111,6 +112,27 @@ final class MovementRecordingWindowTest {
 
 		assertEquals(state, tail.frames().get(0).movementState());
 		assertEquals(2, tail.frames().get(0).movementState().reduceTicks());
+	}
+
+	@Test
+	void tailRebasesAttackReductionOntoItsMovementFrame() {
+		List<MoveFrame> frames = List.of(
+			frame(new Position(0, 64, 0), Rotation.zero(), Collections.emptyMap()),
+			frame(new Position(1, 64, 0), Rotation.zero(), Collections.emptyMap()),
+			frame(new Position(2, 64, 0), Rotation.zero(), Collections.emptyMap()),
+			frame(new Position(3, 64, 0), Rotation.zero(), Collections.emptyMap())
+		);
+		MovementRecording source = recording(frames, List.of(
+			new AttackReduction(TickRange.betweenExclusive(1, 2)),
+			new AttackReduction(TickRange.betweenExclusive(3, 4))
+		));
+
+		MovementRecording tail = MovementRecordingWindow.tail(source, 2);
+
+		assertEquals(
+			List.of(new AttackReduction(TickRange.betweenExclusive(1, 2))),
+			tail.actions()
+		);
 	}
 
 	@Test

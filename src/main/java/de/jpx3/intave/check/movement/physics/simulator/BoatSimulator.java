@@ -281,7 +281,7 @@ public final class BoatSimulator extends BaseSimulator {
   }
 
   @Override
-  public float stepHeight() {
+  public float stepHeight(User user) {
     return 0.0f;
   }
 }

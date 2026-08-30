@@ -11,8 +11,15 @@
 
 package de.jpx3.intave.check.movement.physics.simulator;
 
+import de.jpx3.intave.user.User;
+
 final class HorseSimulator extends BaseSimulator {
   private static final double MAXIMUM_HORSE_MOVEMENT_SPEED = 0.22499999403953552D;//0.3374999970197678;
+
+  @Override
+  public float stepHeight(User user) {
+    return 0.6F;
+  }
 
 //  @Override
 //  @Deprecated

@@ -80,11 +80,9 @@ dependencies {
   testImplementation("net.dmulloy2:ProtocolLib:5.4.0")
   testImplementation("io.netty:netty-all:4.2.15.Final")
 
-  // Loaded by Libraries.setupLibraries() when the plugin starts.
-  compileOnly("ac.intave:samples:0.0.8")
-  compileOnly("ac.intave:cloud-protocol:0.0.4") { isTransitive = false }
-  testImplementation("ac.intave:samples:0.0.8")
-  testImplementation("ac.intave:cloud-protocol:0.0.4") { isTransitive = false }
+  // Intave-owned APIs are packaged into the shaded plugin jar.
+  implementation("ac.intave:samples:0.0.8") { isTransitive = false }
+  implementation("ac.intave:cloud-protocol:0.0.6") { isTransitive = false }
 
   // random shit[
   compileOnly("org.jetbrains:annotations:23.1.0")

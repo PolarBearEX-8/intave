@@ -22,6 +22,7 @@ import de.jpx3.intave.codec.ByteBufStreamCodecs;
 import de.jpx3.intave.codec.StreamCodec;
 import de.jpx3.intave.module.test.record.*;
 import de.jpx3.intave.module.test.record.action.Action;
+import de.jpx3.intave.module.test.record.action.AttackReduction;
 import de.jpx3.intave.module.test.record.action.PistonSlimeAction;
 import de.jpx3.intave.module.test.record.action.ShulkerBoxAction;
 import de.jpx3.intave.player.attribute.Attribute;
@@ -212,6 +213,23 @@ final class MovementRecordingSerializerTest {
 			true,
 			TickRange.betweenInclusive(65, 66)
 		);
+		recording.insertAction(action);
+
+		ByteBuf buffer = Unpooled.buffer();
+		try {
+			MovementRecording.STREAM_CODEC.encode(buffer, recording);
+			MovementRecording decoded = MovementRecording.STREAM_CODEC.decode(buffer);
+
+			assertEquals(List.of(action), decoded.actions());
+		} finally {
+			buffer.release();
+		}
+	}
+
+	@Test
+	void serializesAttackReductions() {
+		MovementRecording recording = MovementRecording.create();
+		AttackReduction action = new AttackReduction(TickRange.betweenExclusive(3, 4));
 		recording.insertAction(action);
 
 		ByteBuf buffer = Unpooled.buffer();

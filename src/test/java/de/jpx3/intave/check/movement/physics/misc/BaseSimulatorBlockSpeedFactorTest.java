@@ -125,6 +125,60 @@ final class BaseSimulatorBlockSpeedFactorTest {
 		assertHorizontalScale(air, soulSand, 0.4D);
 	}
 
+	@Test
+	void movementEfficiencyInterpolatesBlockSlowdownFrom121() {
+		Motion air = simulateAfterTickWithMovementEfficiency(VER_1_21, AIR, 0.5D);
+		Motion honey = simulateAfterTickWithMovementEfficiency(VER_1_21, HONEY, 0.5D);
+
+		float expectedFactor = 0.4F + 0.5F * (1.0F - 0.4F);
+		assertHorizontalScale(air, honey, expectedFactor);
+	}
+
+	@Test
+	void pre121ClientIgnoresMovementEfficiencyAttribute() {
+		Motion air = simulateAfterTickWithMovementEfficiency(VER_1_20_5, AIR, 0.5D);
+		Motion honey = simulateAfterTickWithMovementEfficiency(VER_1_20_5, HONEY, 0.5D);
+
+		assertHorizontalScale(air, honey, 0.4F);
+	}
+
+	@Test
+	void waterMovementEfficiencyInterpolatesPostMoveSlowdownFrom121() {
+		Motion normal = simulateAfterTickWithWaterMovementEfficiency(VER_1_21, 0.0D);
+		Motion efficient = simulateAfterTickWithWaterMovementEfficiency(VER_1_21, 1.0D);
+		float normalMultiplier = 0.8F;
+		float efficientMultiplier = normalMultiplier
+			+ (0.54600006F - normalMultiplier) * 0.5F;
+
+		double expectedScale = efficientMultiplier / normalMultiplier;
+		assertEquals(normal.motionX * expectedScale, efficient.motionX, 1.0E-7D);
+		assertEquals(normal.motionY, efficient.motionY, EPSILON);
+		assertEquals(normal.motionZ * expectedScale, efficient.motionZ, 1.0E-7D);
+	}
+
+	private static Motion simulateAfterTickWithMovementEfficiency(
+		int protocolVersion,
+		BlockCache blockCache,
+		double movementEfficiency
+	) {
+		return simulateAfterTick(
+			protocolVersion, blockCache, POSITION,
+			Pose.STANDING, false, false, false,
+			movementEfficiency, 0.0D, false
+		);
+	}
+
+	private static Motion simulateAfterTickWithWaterMovementEfficiency(
+		int protocolVersion,
+		double waterMovementEfficiency
+	) {
+		return simulateAfterTick(
+			protocolVersion, AIR, POSITION,
+			Pose.STANDING, false, false, false,
+			0.0D, waterMovementEfficiency, true
+		);
+	}
+
 	private static Motion simulateAfterTick(
 		int protocolVersion,
 		BlockCache blockCache,
@@ -135,7 +189,8 @@ final class BaseSimulatorBlockSpeedFactorTest {
 	) {
 		return simulateAfterTick(
 			protocolVersion, blockCache, POSITION,
-			pose, gliding, abilityFlying, allowFlying
+			pose, gliding, abilityFlying, allowFlying,
+			0.0D, 0.0D, false
 		);
 	}
 
@@ -147,6 +202,25 @@ final class BaseSimulatorBlockSpeedFactorTest {
 		boolean gliding,
 		boolean abilityFlying,
 		boolean allowFlying
+	) {
+		return simulateAfterTick(
+			protocolVersion, blockCache, position,
+			pose, gliding, abilityFlying, allowFlying,
+			0.0D, 0.0D, false
+		);
+	}
+
+	private static Motion simulateAfterTick(
+		int protocolVersion,
+		BlockCache blockCache,
+		Position position,
+		Pose pose,
+		boolean gliding,
+		boolean abilityFlying,
+		boolean allowFlying,
+		double movementEfficiency,
+		double waterMovementEfficiency,
+		boolean inWater
 	) {
 		World world = FakeWorldFactory.createWorld(
 			(methodName, _) -> switch (methodName) {
@@ -173,6 +247,8 @@ final class BaseSimulatorBlockSpeedFactorTest {
 		UserRepository.manuallyRegisterUser(player, user);
 		user.meta().abilities().setFlying(abilityFlying);
 		user.meta().abilities().setAllowFlying(allowFlying);
+		user.meta().abilities().modifyBaseValue("generic.movement_efficiency", movementEfficiency);
+		user.meta().abilities().modifyBaseValue("generic.water_movement_efficiency", waterMovementEfficiency);
 
 		MovementMetadata environment = user.meta().movement();
 		environment.updateMovement(position, ROTATION);
@@ -180,7 +256,7 @@ final class BaseSimulatorBlockSpeedFactorTest {
 		environment.setLastPosition(position);
 		environment.setPose(pose);
 		environment.gliding = gliding;
-		environment.setInWater(false);
+		environment.setInWater(inWater);
 		environment.setInLava(false);
 		environment.onGround = false;
 		environment.setLastOnGround(false);

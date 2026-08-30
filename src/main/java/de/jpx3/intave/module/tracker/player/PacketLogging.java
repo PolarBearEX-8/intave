@@ -36,6 +36,7 @@ public class PacketLogging extends Module {
   private final Map<UUID, PacketAdapter> adapterMap = GarbageCollector.watch(new HashMap<>());
   private final Map<String, UUID> packetLoggers = GarbageCollector.watch(new HashMap<>());
   private final Map<UUID, PrintStream> packetLogStreams = GarbageCollector.watch(new HashMap<>());
+  private final Map<UUID, File> packetLogFiles = GarbageCollector.watch(new HashMap<>());
 
   {
     ShutdownTasks.add(() -> {
@@ -58,9 +59,6 @@ public class PacketLogging extends Module {
   }
 
   public void togglePacketLogging(CommandSender sender, Player target) {
-    File logsFolder = new File(plugin.dataFolder(), "packetlogs");
-    File packetLogFile = new File(logsFolder, packetLogFileName(target.getName()));
-
     UUID userId = target.getUniqueId();
     if (packetLoggers.containsKey(sender.getName())) {
       if (!packetLoggers.get(sender.getName()).equals(userId)) {
@@ -70,25 +68,55 @@ public class PacketLogging extends Module {
       } else {
         sender.sendMessage(IntavePlugin.prefix() + ChatColor.GREEN + "Packetlogging stopped");
       }
-      PacketAdapter remove1 = adapterMap.remove(userId);
-      ProtocolLibrary.getProtocolManager().removePacketListener(remove1);
       packetLoggers.remove(sender.getName());
-      PrintStream remove = packetLogStreams.remove(userId);
-      if (remove != null) {
-        remove.flush();
-        remove.close();
-      }
+      stopPacketLogging(userId);
       return;
     }
 
+    File packetLogFile = startPacketLogging(target);
+    if (packetLogFile == null) {
+      return;
+    }
+    packetLoggers.put(sender.getName(), userId);
+    sender.sendMessage(IntavePlugin.prefix() + ChatColor.GREEN + "Packetlogging started for " + target.getName());
+    sender.sendMessage(IntavePlugin.prefix() + "You can find it under " + packetLogFile.getAbsolutePath());
+  }
+
+  public List<String> setPacketLoggingState(Player target, boolean enabled) {
+    if (target == null) {
+      return Collections.emptyList();
+    }
+    return setPacketLoggingState(target.getUniqueId(), target, enabled);
+  }
+
+  public List<String> setPacketLoggingState(UUID userId, Player target, boolean enabled) {
+    if (userId == null) {
+      return Collections.emptyList();
+    }
+    if (enabled) {
+      if (target != null && !adapterMap.containsKey(userId)) {
+        startPacketLogging(target);
+      }
+      return Collections.emptyList();
+    } else {
+      return stopPacketLogging(userId);
+    }
+  }
+
+  private File startPacketLogging(Player target) {
+    UUID userId = target.getUniqueId();
+    if (adapterMap.containsKey(userId)) {
+      return null;
+    }
+    File logsFolder = new File(plugin.dataFolder(), "packetlogs");
+    File packetLogFile = new File(logsFolder, packetLogFileName(target.getName()));
     try {
       logsFolder.mkdir();
       packetLogFile.createNewFile();
     } catch (IOException exception) {
       exception.printStackTrace();
-      return;
+      return null;
     }
-
     try {
       OutputStream stream = new FileOutputStream(packetLogFile);
       stream = new BufferedOutputStream(stream);
@@ -128,13 +156,46 @@ public class PacketLogging extends Module {
       };
       adapterMap.put(userId, adapter);
       ProtocolLibrary.getProtocolManager().addPacketListener(adapter);
-      packetLoggers.put(sender.getName(), userId);
       packetLogStreams.put(userId, printStream);
+      packetLogFiles.put(userId, packetLogFile);
+      return packetLogFile;
     } catch (FileNotFoundException exception) {
       exception.printStackTrace();
+      return null;
     }
-    sender.sendMessage(IntavePlugin.prefix() + ChatColor.GREEN + "Packetlogging started for " + target.getName());
-    sender.sendMessage(IntavePlugin.prefix() + "You can find it under " + packetLogFile.getAbsolutePath());
+  }
+
+  private List<String> stopPacketLogging(UUID userId) {
+    PacketAdapter adapter = adapterMap.remove(userId);
+    if (adapter != null) {
+      ProtocolLibrary.getProtocolManager().removePacketListener(adapter);
+    }
+    PrintStream stream = packetLogStreams.remove(userId);
+    if (stream != null) {
+      stream.flush();
+      stream.close();
+    }
+    File packetLogFile = packetLogFiles.remove(userId);
+    if (packetLogFile == null || !packetLogFile.isFile()) {
+      return Collections.emptyList();
+    }
+    try {
+      return readPacketLog(packetLogFile);
+    } catch (IOException exception) {
+      exception.printStackTrace();
+      return Collections.emptyList();
+    }
+  }
+
+  private static List<String> readPacketLog(File packetLogFile) throws IOException {
+    List<String> lines = new ArrayList<>();
+    try (BufferedReader reader = new BufferedReader(new FileReader(packetLogFile))) {
+      String line;
+      while ((line = reader.readLine()) != null) {
+        lines.add(line);
+      }
+    }
+    return lines;
   }
 
   public void logSystemMessage(User target, Supplier<String> messageSupplier) {

@@ -30,6 +30,7 @@ import de.jpx3.intave.module.tracker.entity.Entity;
 import de.jpx3.intave.player.collider.complex.SimulationResult;
 import de.jpx3.intave.share.*;
 import de.jpx3.intave.user.User;
+import de.jpx3.intave.user.meta.AbilityMetadata;
 import de.jpx3.intave.user.meta.InventoryMetadata;
 import de.jpx3.intave.user.meta.MetadataBundle;
 import de.jpx3.intave.user.meta.ProtocolMetadata;
@@ -283,19 +284,28 @@ public interface SimulationEnvironment {
   // Entity.getBlockSpeedFactor @ 1.19
   default float blockSpeedFactor() {
     User user = user();
+    AbilityMetadata abilities = user.meta().abilities();
     ProtocolMetadata protocol = user.meta().protocol();
+    float speedFactor;
     if (protocol.trailsAndTailsUpdate()) {
       Material material = VolatileBlockAccess.typeAccess(user, blockPosition());
       float f = BlockProperties.speedFactorOf(material);
 
       if (!MaterialMagic.isWater(material) && material != BlockTypeAccess.BUBBLE_COLUMN) {
-        return f == 1.0 ? BlockProperties.speedFactorOf(frictionMaterial()) : f;
+        speedFactor = f == 1.0 ? BlockProperties.speedFactorOf(frictionMaterial()) : f;
       } else {
-        return f;
+        speedFactor = f;
       }
     } else {
-      return BlockProperties.speedFactorOf(frictionMaterial());
+      speedFactor = BlockProperties.speedFactorOf(frictionMaterial());
     }
+
+    if (protocol.supportsMovementEfficiencyAttribute()
+      && abilities.hasAttribute("generic.movement_efficiency")) {
+      float efficiency = (float) abilities.movementEfficiency();
+      speedFactor += efficiency * (1.0F - speedFactor);
+    }
+    return speedFactor;
   }
 
   float jumpMovementFactor();
@@ -341,15 +351,11 @@ public interface SimulationEnvironment {
           boundingBox.maxX, boundingBox.minY, boundingBox.maxZ
         );
         BlockPosition supportingBlock = findSupportingBlock(user, testArea);
-        BlockPosition result;
-        if (supportingBlock != null || onGroundNoBlocks()) {
-          result = supportingBlock;
-	      } else {
-	        BoundingBox thirdBoundingBox = testArea.move(-motion.motionX, 0.0, -motion.motionZ);
-          supportingBlock = findSupportingBlock(user, thirdBoundingBox);
-          result = supportingBlock;
+	      if (supportingBlock == null && !onGroundNoBlocks()) {
+		      BoundingBox thirdBoundingBox = testArea.move(-motion.motionX, 0.0, -motion.motionZ);
+		      supportingBlock = findSupportingBlock(user, thirdBoundingBox);
 	      }
-	      setMainSupportingBlockPos(result);
+	      setMainSupportingBlockPos(supportingBlock);
         setOnGroundNoBlocks(supportingBlock == null);
       } else {
         setMainSupportingBlockPos(null);

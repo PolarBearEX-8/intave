@@ -17,9 +17,6 @@ import de.jpx3.intave.share.Motion;
 import de.jpx3.intave.share.Position;
 import de.jpx3.intave.user.User;
 
-/**
- * Simulates client block entities after the client has ticked its entities.
- */
 public final class BlockTickEntities {
 	private BlockTickEntities() {
 	}

@@ -34,6 +34,7 @@ public class Timings {
   public static final Timing CHECK_PHYSICS_PROC_ITR_BUILD_CONFIGS = Timing.of("Check/Physics/Proc/Itr/BC", "Check/Physics/Proc/Itr");
 
   public static final Timing CHECK_PHYSICS_SIMULATOR = Timing.of("Check/Physics/Simulator", "Check/Physics");
+  public static final Timing CHECK_PHYSICS_SIMULATOR_PRE_TICK = Timing.of("Check/Physics/Simulator/PreTick", "Check/Physics/Simulator");
   public static final Timing CHECK_PHYSICS_SIMULATOR_BASE = Timing.of("Check/Physics/Simulator/Base", "Check/Physics/Simulator");
   public static final Timing CHECK_PHYSICS_SIMULATOR_BASE_COLLIDER = Timing.of("Check/Physics/Simulator/Base/Collider", "Check/Physics/Simulator/Base");
   public static final Timing CHECK_PHYSICS_SIMULATOR_BASE_COLLIDER_SHAPE_LOOKUP = Timing.of("Check/Physics/Simulator/Base/Collider/ShapeLookup", "Check/Physics/Simulator/Base/Collider");

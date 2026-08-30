@@ -54,6 +54,34 @@ public final class CloudStage extends CommandStage {
   }
 
   @SubCommand(
+    selectors = "command",
+    usage = "<command...>",
+    description = "Send a command to the cloud"
+  )
+  public void commandCommand(User user, String[] commandParts) {
+    String command = String.join(" ", commandParts).trim();
+    Player player = user.player();
+
+    if (command.isEmpty()) {
+      player.sendMessage(IntavePlugin.prefix() + ChatColor.RED + "Cloud command cannot be empty");
+      return;
+    }
+
+    Cloud cloud = IntavePlugin.singletonInstance().cloud();
+    if (!cloud.isEnabled()) {
+      player.sendMessage(IntavePlugin.prefix() + ChatColor.RED + "Cloud connection is not enabled");
+      return;
+    }
+
+    if (!cloud.sendCommand(user, command)) {
+      player.sendMessage(IntavePlugin.prefix() + ChatColor.RED + "Cloud connection is not available");
+      return;
+    }
+
+    player.sendMessage(IntavePlugin.prefix() + ChatColor.GRAY + "Command sent to cloud");
+  }
+
+  @SubCommand(
     selectors = "transmission",
     description = "Show player transmission status"
   )

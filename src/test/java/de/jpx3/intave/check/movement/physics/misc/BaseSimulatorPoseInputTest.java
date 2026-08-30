@@ -76,6 +76,27 @@ final class BaseSimulatorPoseInputTest {
 	}
 
 	@Test
+	void waterMovementEfficiencyInterpolatesWaterAccelerationFrom121() {
+		Motion normal = simulate(VER_1_21, Pose.STANDING, false, true, 0.0D);
+		Motion efficient = simulate(VER_1_21, Pose.STANDING, false, true, 1.0D);
+		float normalAcceleration = 0.02F;
+		float efficientAcceleration = normalAcceleration
+			+ (0.1F - normalAcceleration) * 0.5F;
+		double expectedScale = efficientAcceleration / normalAcceleration;
+
+		assertEquals(normal.motionX * expectedScale, efficient.motionX, 1.0E-8D);
+		assertEquals(normal.motionZ * expectedScale, efficient.motionZ, 1.0E-8D);
+	}
+
+	@Test
+	void pre121ClientIgnoresWaterMovementEfficiencyAttribute() {
+		Motion normal = simulate(VER_1_20_5, Pose.STANDING, false, true, 0.0D);
+		Motion efficient = simulate(VER_1_20_5, Pose.STANDING, false, true, 1.0D);
+
+		assertMotionEquals(normal, efficient);
+	}
+
+	@Test
 	void stoppedFallFlyingPoseRetainsCrawlingSlowdown() {
 		assertUsesCrawlingSlowdown(VER_26_1_1, Pose.FALL_FLYING, false);
 	}
@@ -182,9 +203,39 @@ final class BaseSimulatorPoseInputTest {
 		Pose pose,
 		boolean gliding,
 		boolean inWater,
+		double waterMovementEfficiency
+	) {
+		return simulate(
+			protocolVersion, pose, gliding, inWater,
+			false, false, new MockFullBlockStaticPlane(),
+			waterMovementEfficiency
+		);
+	}
+
+	private static Motion simulate(
+		int protocolVersion,
+		Pose pose,
+		boolean gliding,
+		boolean inWater,
 		boolean sneaking,
 		boolean lastSneaking,
 		BlockCache blockCache
+	) {
+		return simulate(
+			protocolVersion, pose, gliding, inWater,
+			sneaking, lastSneaking, blockCache, 0.0D
+		);
+	}
+
+	private static Motion simulate(
+		int protocolVersion,
+		Pose pose,
+		boolean gliding,
+		boolean inWater,
+		boolean sneaking,
+		boolean lastSneaking,
+		BlockCache blockCache,
+		double waterMovementEfficiency
 	) {
 		World world = FakeWorldFactory.createWorld(
 			(methodName, _) -> switch (methodName) {
@@ -208,6 +259,9 @@ final class BaseSimulatorPoseInputTest {
 			default -> null;
 		});
 		UserRepository.manuallyRegisterUser(player, user);
+		user.meta().abilities().modifyBaseValue(
+			"generic.water_movement_efficiency", waterMovementEfficiency
+		);
 
 		MovementMetadata environment = user.meta().movement();
 		environment.updateMovement(POSITION, ROTATION);

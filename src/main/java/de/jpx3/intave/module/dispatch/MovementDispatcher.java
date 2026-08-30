@@ -915,10 +915,9 @@ public final class MovementDispatcher extends Module {
       return;
     }
     de.jpx3.intave.share.BlockPosition sleepingBedPosition = reader.bedPosition();
-    user.sendMessage(IntavePlugin.prefix() + "Player is sleeping in bed at " + sleepingBedPosition);
-    user.packetTickFeedback(event, () -> {
-      user.meta().movement().sleepingBedPosition = sleepingBedPosition;
-    });
+    user.packetTickFeedback(event, () ->
+      user.meta().movement().sleepingBedPosition = sleepingBedPosition
+    );
   }
 
   @PacketSubscription(

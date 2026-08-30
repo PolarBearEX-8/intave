@@ -11,7 +11,6 @@
 
 package de.jpx3.intave.check.movement.physics.search;
 
-import de.jpx3.intave.IntavePlugin;
 import de.jpx3.intave.annotate.Immutable;
 import de.jpx3.intave.annotate.Mutable;
 import de.jpx3.intave.block.tick.BlockTickEntities;
@@ -29,19 +28,13 @@ import de.jpx3.intave.check.movement.physics.simulator.Simulation;
 import de.jpx3.intave.check.movement.physics.simulator.Simulator;
 import de.jpx3.intave.diagnostic.timings.Timings;
 import de.jpx3.intave.executor.RateLimiter;
-import de.jpx3.intave.math.Hypot;
-import de.jpx3.intave.player.ItemProperties;
 import de.jpx3.intave.player.collider.complex.SimulationResult;
 import de.jpx3.intave.search.Searcher;
 import de.jpx3.intave.share.Motion;
 import de.jpx3.intave.share.Position;
-import de.jpx3.intave.user.MessageChannel;
 import de.jpx3.intave.user.User;
-import de.jpx3.intave.user.meta.InventoryMetadata;
-import de.jpx3.intave.user.meta.MetadataBundle;
 import de.jpx3.intave.user.meta.MovementMetadata;
 import it.unimi.dsi.fastutil.longs.Long2LongMap;
-import org.bukkit.ChatColor;
 
 import java.util.*;
 import java.util.function.BiConsumer;
@@ -50,7 +43,6 @@ import java.util.function.Predicate;
 import java.util.stream.Collector;
 
 import static de.jpx3.intave.IntaveControl.FIRST_TICK_MUST_BE_FULLY_SIMULATED;
-import static de.jpx3.intave.check.movement.physics.environment.MoveMetric.TELEPORT;
 import static de.jpx3.intave.math.MathHelper.formatDouble;
 
 public final class ThreeTickSimulationSearch implements SimulationSearch {
@@ -556,31 +548,6 @@ public final class ThreeTickSimulationSearch implements SimulationSearch {
 			}
 		}
 		candidates.add(candidate);
-	}
-
-	private void applySimulation(User user, Simulation simulation) {
-		MetadataBundle meta = user.meta();
-		MovementMetadata movementData = meta.movement();
-		InventoryMetadata inventoryData = meta.inventory();
-
-		MovementConfiguration configuration = simulation.configuration();
-
-		boolean movementSuggestsHandIsActive = configuration.isHandActive();
-		boolean packetsSuggestsHandIsActive = inventoryData.handActive();
-		if (packetsSuggestsHandIsActive && !movementSuggestsHandIsActive) {
-			boolean releaseHandConditions = Hypot.fast(movementData.offsetMotionX(), movementData.offsetMotionZ()) > 0.3 || movementData.ticksPast(TELEPORT) >= 2;
-			boolean itemIsBow = ItemProperties.isBow(meta.inventory().activeItemType()) || ItemProperties.isBow(meta.inventory().offhandItemType());
-			boolean viaVersionBlockReplacement = meta.protocol().viaVersionShieldBlockReplacement();
-			boolean ignoredSlowdown = releaseHandConditions && (!itemIsBow || (inventoryData.handActiveTicks > 3 && !viaVersionBlockReplacement)) && true;
-
-			if (ignoredSlowdown && movementData.handItemSimulationFails++ > 1) {
-				meta.inventory().releaseItemNextTick();
-
-				if (user.receives(MessageChannel.DEBUG_ITEM_RESETS)) {
-					user.player().sendMessage(IntavePlugin.prefix() + "Requesting item usage reset as " + ChatColor.RED + "movement/state discrepancy ");
-				}
-			}
-		}
 	}
 
 	private boolean likelyInaccurate(User user, SimulationEnvironment movementData) {

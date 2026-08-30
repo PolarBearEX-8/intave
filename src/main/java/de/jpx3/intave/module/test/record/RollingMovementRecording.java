@@ -129,6 +129,12 @@ public final class RollingMovementRecording {
 		operation.accept(active);
 	}
 
+	/** Records an attack reduction against the next frame, rotating first at a segment boundary. */
+	public synchronized void recordAttackReduction() {
+		rotateAtLimit();
+		active.recordAttackReduction();
+	}
+
 	public synchronized boolean uploadOnCooldown() {
 		return cooldownFramesRemaining > 0;
 	}

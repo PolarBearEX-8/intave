@@ -3,10 +3,9 @@ package de.jpx3.classloader;
 import java.io.*;
 import java.net.URL;
 import java.net.URLConnection;
-import java.nio.channels.Channels;
-import java.nio.channels.FileChannel;
-import java.nio.channels.ReadableByteChannel;
 import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.security.MessageDigest;
 import java.util.List;
 import java.util.Locale;
@@ -61,11 +60,30 @@ public final class NativeLibrary {
   }
 
   private void prepareCache() throws IOException, IllegalAccessException {
-    if (!cacheFile().exists()) {
-      // download
+    if (cacheFile().exists()) {
+      try {
+        hashCheck();
+        return;
+      } catch (IllegalAccessException ignored) {
+        // hashCheck deletes incomplete and untrusted cache entries
+      }
+    }
+
+    if (!copyBundledLibraryToCache()) {
       tryDownload();
     }
     hashCheck();
+  }
+
+  private boolean copyBundledLibraryToCache() throws IOException {
+    String resourcePath = "/de/jpx3/classloader/native/v" + version + "/" + libraryFileName();
+    try (InputStream inputStream = NativeLibrary.class.getResourceAsStream(resourcePath)) {
+      if (inputStream == null) {
+        return false;
+      }
+      copyToCache(inputStream);
+      return true;
+    }
   }
 
   private void hashCheck() throws IllegalAccessException {
@@ -104,42 +122,40 @@ public final class NativeLibrary {
     connection.addRequestProperty("User-Agent", "Intave/$VERSION$");
     connection.addRequestProperty("Cache-Control", "no-cache, no-store, must-revalidate");
     connection.addRequestProperty("Pragma", "no-cache");
-    connection.setConnectTimeout(8000);
-    connection.setReadTimeout(8000);
+    connection.setConnectTimeout(30_000);
+    connection.setReadTimeout(60_000);
     connection.connect();
-    InputStream inputStream = connection.getInputStream();
-    ReadableByteChannel readableByteChannel = Channels.newChannel(inputStream);
-    cacheFile().getParentFile().mkdirs();
-    cacheFile().createNewFile();
-    FileChannel fileChannel = new FileOutputStream(cacheFile()).getChannel();
-    fileChannel.transferFrom(readableByteChannel, 0, Long.MAX_VALUE);
+    try (InputStream inputStream = connection.getInputStream()) {
+      copyToCache(inputStream);
+    }
   }
 
-  private String targetURL() {
-    URLConnection con;
-    try {
-      URL url = new URL("https://raw.githubusercontent.com/intave/domains/main/service2");
-      con = url.openConnection();
-      con.setConnectTimeout(5000);
-      con.setReadTimeout(5000);
-      con.setUseCaches(false);
-      con.setDefaultUseCaches(false);
-    } catch (Exception exception) {
-      return "service.intave.de";
+  private void copyToCache(InputStream inputStream) throws IOException {
+    File cacheFile = cacheFile();
+    File cacheDirectory = cacheFile.getParentFile();
+    if (!cacheDirectory.isDirectory() && !cacheDirectory.mkdirs() && !cacheDirectory.isDirectory()) {
+      throw new IOException("Unable to create native library cache directory " + cacheDirectory);
     }
-    try (BufferedReader reader = new BufferedReader(new InputStreamReader(con.getInputStream()))) {
-      return reader.readLine();
-    } catch (IOException e) {
-      return "service.intave.de";
+
+    Path temporaryFile = Files.createTempFile(cacheDirectory.toPath(), cacheFile.getName(), ".download");
+    try {
+      Files.copy(inputStream, temporaryFile, StandardCopyOption.REPLACE_EXISTING);
+      Files.move(temporaryFile, cacheFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
+    } finally {
+      Files.deleteIfExists(temporaryFile);
     }
   }
 
   public String downloadUrl() {
+    return baseDownloadURL + libraryFileName();
+  }
+
+  private String libraryFileName() {
     String operatingSystem = System.getProperty("os.name").toLowerCase(Locale.ROOT);
     if (operatingSystem.contains("win")) {
-      return baseDownloadURL + "classloader-" + suffix();
+      return "classloader-" + suffix();
     }
-    return baseDownloadURL + "libclassloader-" + suffix();
+    return "libclassloader-" + suffix();
   }
 
   public String suffix() {

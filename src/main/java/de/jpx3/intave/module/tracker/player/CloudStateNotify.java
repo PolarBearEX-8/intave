@@ -14,12 +14,20 @@ package de.jpx3.intave.module.tracker.player;
 import de.jpx3.intave.module.Module;
 import de.jpx3.intave.module.linker.bukkit.BukkitEventSubscription;
 import org.bukkit.event.player.PlayerJoinEvent;
+import org.bukkit.event.player.PlayerKickEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 
 public final class CloudStateNotify extends Module {
   @BukkitEventSubscription
   public void on(PlayerJoinEvent join) {
     plugin.cloud().playerLogin(join.getPlayer());
+  }
+
+  @BukkitEventSubscription
+  public void on(PlayerKickEvent kick) {
+    if (!kick.isCancelled()) {
+      plugin.cloud().playerKicked(kick.getPlayer(), kick.getReason());
+    }
   }
 
   @BukkitEventSubscription

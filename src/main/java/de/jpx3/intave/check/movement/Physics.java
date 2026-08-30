@@ -159,19 +159,23 @@ public final class Physics extends Check {
     MovementMetadata movementData = meta.movement();
     Simulator simulator = Simulators.selectFor(movementData);
     movementData.setSimulator(simulator);
-    movementData.setStepHeight(simulator.stepHeight());
+    movementData.setStepHeight(simulator.stepHeight(user));
 
     /*
      * Run simulatePreTick on last base motion
      */
     SimulationEnvironment firstTickBranch = movementData.mutableView();
     Motion previousBaseMotion = firstTickBranch.mutableBaseMotionCopy();
-    Motion preTickMotion = simulator.simulatePreTick(user, previousBaseMotion.copy(), firstTickBranch);
+    Timings.CHECK_PHYSICS_SIMULATOR_PRE_TICK.start();
+    Motion preTickMotion = simulator.simulatePreTick(
+      user, previousBaseMotion.copy(), firstTickBranch
+    );
+    Timings.CHECK_PHYSICS_SIMULATOR_PRE_TICK.stop();
     firstTickBranch.setBaseMotion(preTickMotion);
 
     simulator = Simulators.selectFor(firstTickBranch);
     movementData.setSimulator(simulator);
-    movementData.setStepHeight(simulator.stepHeight());
+    movementData.setStepHeight(simulator.stepHeight(user));
 
     /*
      * Run simulatePreTick on all postTickMotionCandidates, discarding the environment changes
@@ -186,13 +190,12 @@ public final class Physics extends Check {
       } else {
         List<PostTickSimulation> newCandidates = new ArrayList<>();
         for (PostTickSimulation candidate : candidates) {
-          newCandidates.add(
-            candidate.withMotion(
-              simulator.simulatePreTick(
-                user, candidate.motion(), movementData.mutableView()
-              )
-            )
+          Timings.CHECK_PHYSICS_SIMULATOR_PRE_TICK.start();
+          Motion candidateMotion = simulator.simulatePreTick(
+            user, candidate.motion(), movementData.mutableView()
           );
+          Timings.CHECK_PHYSICS_SIMULATOR_PRE_TICK.stop();
+          newCandidates.add(candidate.withMotion(candidateMotion));
         }
         movementData.setPostTickMotionCandidates(newCandidates);
       }
@@ -812,7 +815,7 @@ public final class Physics extends Check {
       }
       granularDebugs.put("insig", formatDouble(violationLevelData.physicsInsignificantBufferVL, 1));
       granularDebugs.put("acc/off", formatDouble(violationLevelData.physicsOffset, 2));
-      granularDebugs.put("client_chunk", clientChunkLoaded ? "loaded" : "unloaded");
+      granularDebugs.put("chunk", clientChunkLoaded ? "LOADED" : "UNLOADED");
       granularDebugs.put("s/c v", MinecraftVersion.current().getVersion() + " / " + user.protocolVersion());
       BlockShape collShape = Collision.shape(user, movementData, currentBoundingBox);
       granularDebugs.put("coll", collShape.toString());

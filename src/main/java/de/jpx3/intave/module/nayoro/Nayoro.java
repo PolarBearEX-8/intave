@@ -47,6 +47,7 @@ public final class Nayoro extends Module {
   private final UserLocal<Set<EventSink>> eventSinks = UserLocal.withInitial(this::defaultSinksFor, this::disableRecordingFor);
   private final Map<UUID, Boolean> recording = GarbageCollector.watch(new ConcurrentHashMap<>());
   private final Map<UUID, OperationalMode> recordingMode = GarbageCollector.watch(new ConcurrentHashMap<>());
+  private final Map<UUID, Integer> samplingBufferSizes = GarbageCollector.watch(new ConcurrentHashMap<>());
   private final PacketEventDispatch packetEventDispatch = new PacketEventDispatch(this::emit);
   private final List<Playback> playbacks = new ArrayList<>();
 
@@ -150,7 +151,14 @@ public final class Nayoro extends Module {
     return eventSinks.get(user);
   }
 
-  private final static int CLOUD_TRANSMISSION_BUFFER_SIZE = 1024 * 8;
+  private final static int DEFAULT_CLOUD_TRANSMISSION_BUFFER_SIZE = 1024 * 8;
+
+  public void setSamplingBufferSize(User user, int bufferSize) {
+    if (bufferSize <= 0) {
+      throw new IllegalArgumentException("Sampling buffer size must be positive");
+    }
+    samplingBufferSizes.put(user.id(), bufferSize);
+  }
 
   public OutputStream writeStreamFor(
     Player player, Sample sample,
@@ -200,7 +208,7 @@ public final class Nayoro extends Module {
             IntavePlugin plugin = IntavePlugin.singletonInstance();
             plugin.cloud().completeSampleTransmission(player, transmissionId, sampleSubIndex.get());
           }
-        }, CLOUD_TRANSMISSION_BUFFER_SIZE);
+        }, samplingBufferSizes.getOrDefault(player.getUniqueId(), DEFAULT_CLOUD_TRANSMISSION_BUFFER_SIZE));
       case LOCAL_STORAGE:
         return sample.resource().writeStream();
       default:

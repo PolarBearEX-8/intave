@@ -216,7 +216,7 @@ public final class RotationSnapHeuristic extends ClassicHeuristic<RotationSnapHe
             EntityRaytraceBlockConstraint.IGNORE_BLOCKS
           );
 
-          changedLookToEntity = (last.reach() != 10) != (raytrace.reach() != 10);
+          changedLookToEntity = last.missed() != raytrace.missed();
           if (changedLookToEntity) {
             details += ", look changed to entity";
           }
