@@ -16,6 +16,7 @@ public final class TypeTranslators {
     add(StringTranslator.class);
     add(PlayerTranslator.class);
     add(PlayerArrayTranslator.class);
+    add(CheckTranslator.class);
   }
 
   private static void add(Class<? extends TypeTranslator<?>> typeTranslatorClass) {

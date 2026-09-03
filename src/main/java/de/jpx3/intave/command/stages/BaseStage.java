@@ -609,6 +609,18 @@ public final class BaseStage extends CommandStage {
   }
 
   @SubCommand(
+    selectors = "check",
+    usage = "",
+    description = "Enable or temporarily disable checks",
+    permission = "intave.command.check"
+  )
+  @Forward(
+    target = CheckStage.class
+  )
+  public void checkCommand(CommandSender sender) {
+  }
+
+  @SubCommand(
     selectors = "root",
     usage = "",
     description = "",

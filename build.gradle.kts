@@ -152,6 +152,7 @@ bukkit {
     register("intave.command.verbose") { default = OP }
     register("intave.command.combatmodifiers") { default = OP }
     register("intave.command.cps") { default = OP }
+    register("intave.command.check") { default = OP }
     register("intave.command.cloud") { default = OP }
     register("intave.command.proxy") { default = FALSE }
     register("intave.command.noupdate") { default = FALSE }
