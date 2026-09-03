@@ -16,6 +16,7 @@ import com.comphenix.protocol.events.PacketEvent;
 import de.jpx3.intave.IntaveLogger;
 import de.jpx3.intave.IntavePlugin;
 import de.jpx3.intave.access.UnsupportedFallbackOperationException;
+import de.jpx3.intave.check.EventProcessor;
 import de.jpx3.intave.diagnostic.timings.Timing;
 import de.jpx3.intave.diagnostic.timings.Timings;
 import de.jpx3.intave.module.linker.SubscriptionInstanceProvider;
@@ -109,6 +110,10 @@ public final class FilteringPacketAdapter extends WeakReferencePacketAdapter imp
   }
 
   private boolean validateEvent(PacketEvent event) {
+    PacketEventSubscriber eventSubscriber = subscriber.fallback();
+    if (eventSubscriber instanceof EventProcessor && !((EventProcessor) eventSubscriber).shouldProcessEvents()) {
+      return false;
+    }
     if (TEMP_PLAYER_CHECK) {
       // perform temporary check
       if (event.isPlayerTemporary()) {

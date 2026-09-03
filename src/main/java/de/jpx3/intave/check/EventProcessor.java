@@ -11,4 +11,13 @@ import de.jpx3.intave.module.linker.packet.PacketEventSubscriber;
 public interface EventProcessor extends BukkitEventSubscriber,
                                         PacketEventSubscriber,
                                         NayoroEventSubscriber {
+  /**
+   * Returns whether events should currently be forwarded to this processor.
+   * Non-check processors are active by default.
+   *
+   * @return whether this processor should receive events
+   */
+  default boolean shouldProcessEvents() {
+    return true;
+  }
 }

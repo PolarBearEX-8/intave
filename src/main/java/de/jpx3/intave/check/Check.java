@@ -50,7 +50,7 @@ public abstract class Check implements EventProcessor {
   private final Map<TrustFactor, CheckStatistics> perTrustFactorStatistics = new EnumMap<>(TrustFactor.class);
   private final List<CheckPart<?>> checkParts = new ArrayList<>();
   private final CheckConfiguration checkConfiguration = new CheckConfiguration(this);
-  private final boolean enabled;
+  private volatile boolean enabled;
   private MitigationStrategy mitigationStrategy;
   private MitigationStrategy defaultMitigationStrategy = MitigationStrategy.NOT_SUPPORTED;
 
@@ -212,13 +212,22 @@ public abstract class Check implements EventProcessor {
 
   /**
    * Retrieve whether the check is enabled.
-   * The {@link Physics} and {@link Timer} check override this method to always return {@code true},
+   * The {@link Physics} and {@link Timer} checks override this method to always return {@code true},
    * as they must be enabled and therefore can't be disabled.
    *
    * @return whether the check is enabled
    */
   public boolean enabled() {
     return enabled;
+  }
+
+  /**
+   * Set the check's enabled state.
+   *
+   * @param enabled the new enabled state
+   */
+  void setEnabled(boolean enabled) {
+    this.enabled = enabled;
   }
 
   /**
@@ -232,6 +241,11 @@ public abstract class Check implements EventProcessor {
    */
   public boolean performLinkage() {
     return enabled;
+  }
+
+  @Override
+  public final boolean shouldProcessEvents() {
+    return performLinkage();
   }
 
   List<CheckPart<?>> checkParts() {

@@ -1,6 +1,7 @@
 package de.jpx3.intave.module.linker.bukkit;
 
 import de.jpx3.intave.IntavePlugin;
+import de.jpx3.intave.check.EventProcessor;
 import de.jpx3.intave.diagnostic.timings.Timing;
 import de.jpx3.intave.diagnostic.timings.Timings;
 import de.jpx3.intave.module.linker.SubscriptionInstanceProvider;
@@ -39,7 +40,9 @@ public final class IntaveRegisteredListener extends RegisteredListener {
 
   @Override
   public void callEvent(Event event) throws EventException {
-    if (!eventClass.isAssignableFrom(event.getClass()) ||
+    BukkitEventSubscriber eventSubscriber = listenerProvider.fallback();
+    if (eventSubscriber instanceof EventProcessor && !((EventProcessor) eventSubscriber).shouldProcessEvents() ||
+      !eventClass.isAssignableFrom(event.getClass()) ||
       checkIfCancelled && ((Cancellable) event).isCancelled()
     ) {
       return;

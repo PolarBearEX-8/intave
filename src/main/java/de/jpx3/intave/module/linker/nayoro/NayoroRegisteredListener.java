@@ -12,6 +12,7 @@
 package de.jpx3.intave.module.linker.nayoro;
 
 import ac.intave.samples.event.Event;
+import de.jpx3.intave.check.EventProcessor;
 import de.jpx3.intave.module.nayoro.PlayerContainer;
 
 public final class NayoroRegisteredListener {
@@ -24,6 +25,9 @@ public final class NayoroRegisteredListener {
   }
 
   public void execute(PlayerContainer player, Event event) {
+    if (subscriber instanceof EventProcessor && !((EventProcessor) subscriber).shouldProcessEvents()) {
+      return;
+    }
     eventExecutor.execute(subscriber, player, event);
   }
 

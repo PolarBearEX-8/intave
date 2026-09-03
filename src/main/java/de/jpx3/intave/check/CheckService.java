@@ -18,6 +18,7 @@ import de.jpx3.intave.check.world.BreakSpeedLimiter;
 import de.jpx3.intave.check.world.InteractionRaytrace;
 import de.jpx3.intave.check.world.PlacementAnalysis;
 import de.jpx3.intave.cleanup.ShutdownTasks;
+import de.jpx3.intave.module.Modules;
 
 import java.util.*;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -187,6 +188,32 @@ public final class CheckService {
    */
   public boolean hasCheck(String checkName) {
     return nameRequestCache.containsKey(checkName.toLowerCase());
+  }
+
+  /**
+   * Changes a check's enabled state for the current runtime. Enabling also links
+   * checks that were disabled when Intave started.
+   *
+   * @param check the check to update
+   * @param enabled the new runtime state
+   * @return {@code true} if the state changed
+   */
+  public boolean setEnabled(Check check, boolean enabled) {
+    if (!checks.contains(check)) {
+      throw new IllegalArgumentException("Check is not managed by this service");
+    }
+    if ((!enabled && (check instanceof Physics || check instanceof Timer)) || check.enabled() == enabled) {
+      return false;
+    }
+    check.setEnabled(enabled);
+    if (enabled) {
+      Collection<Check> selectedCheck = Collections.singleton(check);
+      checkLinker.linkBukkitEventSubscriptions(selectedCheck);
+      checkLinker.linkPacketEventSubscriptions(selectedCheck);
+      checkLinker.linkNayoroEventSubscriptions(selectedCheck);
+      Modules.linker().packetEvents().refreshLinkages();
+    }
+    return true;
   }
 
   /**

@@ -6,6 +6,9 @@ import de.jpx3.intave.module.linker.nayoro.NayoroEventSubscriptionLinker;
 import de.jpx3.intave.module.linker.packet.PacketSubscriptionLinker;
 
 import java.util.Collection;
+import java.util.Collections;
+import java.util.IdentityHashMap;
+import java.util.Set;
 import java.util.function.Consumer;
 
 /**
@@ -28,14 +31,18 @@ import java.util.function.Consumer;
  * @see BukkitEventSubscriptionLinker
  */
 final class CheckLinker {
+  private final Set<EventProcessor> linkedNayoroProcessors = identitySet();
+  private final Set<EventProcessor> linkedPacketProcessors = identitySet();
+  private final Set<EventProcessor> linkedBukkitProcessors = identitySet();
+
   public void linkNayoroEventSubscriptions(Collection<? extends Check> checks) {
     NayoroEventSubscriptionLinker nayoro = Modules.linker().nayoroEvents();
-    iterativeApply(checks, nayoro::registerEventsIn);
+    iterativeLink(checks, linkedNayoroProcessors, nayoro::registerEventsIn);
   }
 
   public void removeNayoroEventSubscriptions(Collection<? extends Check> checks) {
     NayoroEventSubscriptionLinker packetSubscriptionLinker = Modules.linker().nayoroEvents();
-    iterativeApply(checks, packetSubscriptionLinker::unregisterEventsIn);
+    iterativeRemove(checks, linkedNayoroProcessors, packetSubscriptionLinker::unregisterEventsIn);
   }
 
   /**
@@ -47,7 +54,7 @@ final class CheckLinker {
    */
   public void linkPacketEventSubscriptions(Collection<? extends Check> checks) {
     PacketSubscriptionLinker packetSubscriptionLinker = Modules.linker().packetEvents();
-    iterativeApply(checks, packetSubscriptionLinker::linkSubscriptionsIn);
+    iterativeLink(checks, linkedPacketProcessors, packetSubscriptionLinker::linkSubscriptionsIn);
   }
 
   /**
@@ -59,7 +66,7 @@ final class CheckLinker {
    */
   public void removePacketEventSubscriptions(Collection<? extends Check> checks) {
     PacketSubscriptionLinker packetSubscriptionLinker = Modules.linker().packetEvents();
-    iterativeApply(checks, packetSubscriptionLinker::removeSubscriptionsOf);
+    iterativeRemove(checks, linkedPacketProcessors, packetSubscriptionLinker::removeSubscriptionsOf);
   }
 
   /**
@@ -71,7 +78,7 @@ final class CheckLinker {
    */
   public void linkBukkitEventSubscriptions(Collection<? extends Check> checks) {
     BukkitEventSubscriptionLinker bukkitEventLinker = Modules.linker().bukkitEvents();
-    iterativeApply(checks, bukkitEventLinker::registerEventsIn);
+    iterativeLink(checks, linkedBukkitProcessors, bukkitEventLinker::registerEventsIn);
   }
 
   /**
@@ -83,7 +90,48 @@ final class CheckLinker {
    */
   public void removeBukkitEventSubscriptions(Collection<? extends Check> checks) {
     BukkitEventSubscriptionLinker bukkitEventLinker = Modules.linker().bukkitEvents();
-    iterativeApply(checks, bukkitEventLinker::unregisterEventsIn);
+    iterativeRemove(checks, linkedBukkitProcessors, bukkitEventLinker::unregisterEventsIn);
+  }
+
+  private void iterativeLink(
+    Collection<? extends Check> checks,
+    Set<EventProcessor> linkedProcessors,
+    Consumer<? super EventProcessor> applier
+  ) {
+    iterativeApply(checks, processor -> {
+      if (!linkedProcessors.contains(processor)) {
+        applier.accept(processor);
+        linkedProcessors.add(processor);
+      }
+    });
+  }
+
+  private void iterativeRemove(
+    Collection<? extends Check> checks,
+    Set<EventProcessor> linkedProcessors,
+    Consumer<? super EventProcessor> applier
+  ) {
+    for (Check check : checks) {
+      removeIfLinked(check, linkedProcessors, applier);
+      for (CheckPart<?> checkPart : check.checkParts()) {
+        removeIfLinked(checkPart, linkedProcessors, applier);
+      }
+    }
+  }
+
+  private void removeIfLinked(
+    EventProcessor processor,
+    Set<EventProcessor> linkedProcessors,
+    Consumer<? super EventProcessor> applier
+  ) {
+    if (linkedProcessors.contains(processor)) {
+      applier.accept(processor);
+      linkedProcessors.remove(processor);
+    }
+  }
+
+  private static Set<EventProcessor> identitySet() {
+    return Collections.newSetFromMap(new IdentityHashMap<>());
   }
 
   private void iterativeApply(

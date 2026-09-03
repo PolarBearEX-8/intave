@@ -90,4 +90,9 @@ public abstract class CheckPart<P extends Check> implements EventProcessor {
   public boolean enabled() {
     return parentCheck.enabled();
   }
+
+  @Override
+  public final boolean shouldProcessEvents() {
+    return enabled();
+  }
 }
