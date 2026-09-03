@@ -1344,11 +1344,24 @@ public final class Physics extends Check {
 
     boolean movementProvesHandIsInactive = search.itemUseImpossible(0.001);
     boolean packetsSuggestsHandIsActive = inventoryData.handActive();
+    boolean debugNoSlowdown = user.receives(MessageChannel.DEBUG_NO_SLOWDOWN);
     if (packetsSuggestsHandIsActive && movementProvesHandIsInactive) {
-      boolean releaseHandConditions = Hypot.fast(movementData.offsetMotionX(), movementData.offsetMotionZ()) > 0.3 || movementData.ticksPast(TELEPORT) >= 2;
+      double horizontalSpeed = Hypot.fast(movementData.offsetMotionX(), movementData.offsetMotionZ());
+      int ticksSinceTeleport = movementData.ticksPast(TELEPORT);
+      boolean releaseHandConditions = horizontalSpeed > 0.3 || ticksSinceTeleport >= 2;
       boolean itemIsBow = ItemProperties.isBow(meta.inventory().activeItemType()) || ItemProperties.isBow(meta.inventory().offhandItemType());
       boolean viaVersionBlockReplacement = meta.protocol().viaVersionShieldBlockReplacement();
       boolean ignoredSlowdown = releaseHandConditions && (!itemIsBow || (inventoryData.handActiveTicks > 3 && !viaVersionBlockReplacement));
+
+      if (debugNoSlowdown) {
+        boolean requestsReset = ignoredSlowdown && movementData.handItemSimulationFails > 1;
+        user.player().sendMessage(IntavePlugin.prefix() + "No slowdown: active=true, impossible=true, speed="
+          + MathHelper.formatDouble(horizontalSpeed, 4) + ", teleportTicks=" + ticksSinceTeleport
+          + ", bow=" + itemIsBow + ", activeTicks=" + inventoryData.handActiveTicks
+          + ", viaShield=" + viaVersionBlockReplacement + ", release=" + releaseHandConditions
+          + ", ignored=" + ignoredSlowdown
+          + ", fails=" + movementData.handItemSimulationFails + ", reset=" + requestsReset);
+      }
 
       if (ignoredSlowdown && movementData.handItemSimulationFails++ > 1) {
         meta.inventory().releaseItemNextTick();
@@ -1357,6 +1370,9 @@ public final class Physics extends Check {
           user.player().sendMessage(IntavePlugin.prefix() + "Requesting item usage reset as " + ChatColor.RED + "movement/state discrepancy ");
         }
       }
+    } else if (debugNoSlowdown) {
+      user.player().sendMessage(IntavePlugin.prefix() + "No slowdown: active=" + packetsSuggestsHandIsActive
+        + ", impossible=" + movementProvesHandIsInactive);
     }
   }
 
