@@ -51,6 +51,7 @@ object IntaveTaskGroups {
   const val SERVER_RUNS = "Intave - Server Runs"
   const val SERVER_TESTS = "Intave - Server Tests"
   const val CLIENTS = "Intave - Clients"
+  const val BENCHMARKS = "Intave - Benchmarks"
 }
 
 /*
@@ -121,6 +122,44 @@ configurations[benchmarkSourceSet.implementationConfigurationName].extendsFrom(
 )
 configurations[benchmarkSourceSet.runtimeOnlyConfigurationName].extendsFrom(
   configurations.testRuntimeOnly.get()
+)
+
+fun registerBenchmarkTask(
+  taskName: String,
+  descriptionText: String,
+  mainClassName: String,
+) {
+  tasks.register<JavaExec>(taskName) {
+    group = IntaveTaskGroups.BENCHMARKS
+    description = descriptionText
+    dependsOn(benchmarkSourceSet.classesTaskName)
+    classpath = benchmarkSourceSet.runtimeClasspath
+    mainClass.set(mainClassName)
+    javaLauncher.set(
+      project.javaToolchains.launcherFor {
+        languageVersion.set(JavaLanguageVersion.of(25))
+      }
+    )
+
+    val argumentText = providers.gradleProperty("$taskName.args")
+    doFirst {
+      argumentText.orNull
+        ?.takeIf(String::isNotBlank)
+        ?.let { args(it.trim().split(Regex("\\s+"))) }
+    }
+  }
+}
+
+registerBenchmarkTask(
+  "benchmarkPhysics",
+  "Runs the standard movement physics simulator benchmark.",
+  "de.jpx3.intave.benchmark.SimulatorBenchmark",
+)
+
+registerBenchmarkTask(
+  "benchmarkPhysicsMemory",
+  "Runs the movement physics simulator memory benchmark.",
+  "de.jpx3.intave.benchmark.SimulatorMemoryBenchmark",
 )
 
 /*
