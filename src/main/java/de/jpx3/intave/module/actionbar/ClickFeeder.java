@@ -6,6 +6,7 @@ import com.comphenix.protocol.events.PacketEvent;
 import com.comphenix.protocol.wrappers.EnumWrappers;
 import de.jpx3.intave.check.EventProcessor;
 import de.jpx3.intave.check.combat.clickpatterns.Kurtosis;
+import de.jpx3.intave.check.movement.physics.environment.SimulationEnvironment;
 import de.jpx3.intave.module.linker.packet.ListenerPriority;
 import de.jpx3.intave.module.linker.packet.PacketSubscription;
 import de.jpx3.intave.packet.PacketTypes;
@@ -14,6 +15,7 @@ import de.jpx3.intave.packet.reader.PacketReaders;
 import de.jpx3.intave.user.User;
 import de.jpx3.intave.user.UserLocal;
 import de.jpx3.intave.user.UserRepository;
+import de.jpx3.intave.user.meta.ProtocolMetadata;
 import org.bukkit.ChatColor;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
@@ -44,11 +46,11 @@ public final class ClickFeeder implements EventProcessor {
       EntityUseReader reader = PacketReaders.readerOf(packet);
       EnumWrappers.EntityUseAction entityUseAction = reader.useAction();
       if (entityUseAction == EnumWrappers.EntityUseAction.ATTACK) {
-        bufferData.attacks++;
+        bufferData.recordAttack(System.currentTimeMillis());
       }
       reader.release();
     } else if (type == PacketType.Play.Client.ARM_ANIMATION) {
-      bufferData.clicks++;
+      bufferData.recordClick(System.currentTimeMillis());
       if (System.currentTimeMillis() - bufferData.lastMove > 200) {
         bufferData.desynchronizedClick = true;
       }
@@ -68,11 +70,11 @@ public final class ClickFeeder implements EventProcessor {
         }
       } else {
         bufferData.breakingBlock = user.meta().attack().inBreakProcess;
-        bufferData.places++;
+        bufferData.recordPlace(System.currentTimeMillis());
       }
     } else {
       bufferData.breakingBlock = user.meta().attack().inBreakProcess;
-      bufferData.places++;
+      bufferData.recordPlace(System.currentTimeMillis());
     }
   }
 
@@ -87,7 +89,8 @@ public final class ClickFeeder implements EventProcessor {
     User user = UserRepository.userOf(player);
 
     PacketType packetType = event.getPacketType();
-    boolean sendsClientTickEnd = user.meta().protocol().sendsClientTickEnd();
+    ProtocolMetadata protocol = user.meta().protocol();
+    boolean sendsClientTickEnd = protocol.sendsClientTickEnd();
 
     boolean notClientTickEnd = !PacketTypes.isClientEndTick(packetType);
     if (sendsClientTickEnd && notClientTickEnd) {
@@ -95,22 +98,35 @@ public final class ClickFeeder implements EventProcessor {
     }
 
     ClickBufferData bufferData = this.bufferData.get(user);
-    TickAction action = TickAction.NOTHING;
-    int intensity = 0;
+    boolean positionReminderPacket = user.protocolVersion() > ProtocolMetadata.VER_1_8
+      && !sendsClientTickEnd
+      && isPositionReminderPacket(event, bufferData, protocol);
+    TickSample sample = resolveTickSample(bufferData.clicks, bufferData.attacks, bufferData.places);
+    long now = System.currentTimeMillis();
 
-    if (bufferData.clicks > 0) {
-      action = TickAction.CLICK;
-      intensity = bufferData.clicks;
-    }
-    if (bufferData.attacks > 0) {
-      action = TickAction.ATTACK;
-      intensity = bufferData.attacks;
-    } else if (bufferData.places > 0) {
-      action = TickAction.PLACE;
-      intensity = bufferData.places;
-    }
     if (user.anyActionSubscriptions()) {
-      bufferData.append(action, intensity);
+      boolean reconstructTicks = false;
+      int ticksToAdvance = 1;
+      if (user.protocolVersion() > ProtocolMetadata.VER_1_8
+        && !sendsClientTickEnd
+        && bufferData.lastMovePacketType != null
+      ) {
+        SimulationEnvironment movement = user.meta().movement();
+        reconstructTicks = positionReminderPacket
+          || movement.receivedFlyingPacketIn(0)
+          || bufferData.lastMovePacketType.name().equals("FLYING")
+          || bufferData.lastMovePacketType == PacketType.Play.Client.LOOK;
+        if (reconstructTicks) {
+          ticksToAdvance = positionReminderPacket
+            ? 20
+            : Math.max(1, (int) ((now - bufferData.lastTickTimeStamp) / 50f));
+        }
+      }
+      if (reconstructTicks) {
+        appendBufferedTicks(bufferData, now, ticksToAdvance);
+      } else {
+        bufferData.append(sample.action, sample.intensity);
+      }
       String text;
       if (bufferData.anyVisible < 15) {
         text = ChatColor.GRAY + "Intave Recordbar Display";
@@ -161,8 +177,82 @@ public final class ClickFeeder implements EventProcessor {
     bufferData.attacks = 0;
     bufferData.clicks = 0;
     bufferData.places = 0;
+    bufferData.attackTimestamps.clear();
+    bufferData.clickTimestamps.clear();
+    bufferData.placeTimestamps.clear();
     bufferData.desynchronizedClick = false;
-    bufferData.lastMove = System.currentTimeMillis();
+    bufferData.lastMove = now;
+    bufferData.lastMovePacketType = packetType;
+    bufferData.lastTickTimeStamp = now;
+  }
+
+  private boolean isPositionReminderPacket(
+    PacketEvent event, ClickBufferData bufferData, ProtocolMetadata protocol
+  ) {
+    PacketType packetType = event.getPacketType();
+    if (packetType != PacketType.Play.Client.POSITION
+      && packetType != PacketType.Play.Client.POSITION_LOOK
+    ) {
+      return false;
+    }
+
+    double positionX = event.getPacket().getDoubles().read(0);
+    double positionY = event.getPacket().getDoubles().read(1);
+    double positionZ = event.getPacket().getDoubles().read(2);
+    double offsetX = positionX - bufferData.lastReportedPositionX;
+    double offsetY = positionY - bufferData.lastReportedPositionY;
+    double offsetZ = positionZ - bufferData.lastReportedPositionZ;
+    double distanceSquared = offsetX * offsetX + offsetY * offsetY + offsetZ * offsetZ;
+    double movementThresholdSquared = protocol.protocolVersion() >= ProtocolMetadata.VER_1_18_2
+      ? 0.0002 * 0.0002
+      : 9.0E-4;
+    boolean reminder = bufferData.hasReportedPosition && distanceSquared <= movementThresholdSquared;
+    bufferData.hasReportedPosition = true;
+    bufferData.lastReportedPositionX = positionX;
+    bufferData.lastReportedPositionY = positionY;
+    bufferData.lastReportedPositionZ = positionZ;
+    return reminder;
+  }
+
+  static void appendBufferedTicks(ClickBufferData bufferData, long now, int ticksToAdvance) {
+    for (int age = ticksToAdvance - 1; age >= 0; age--) {
+      int clicks = countAtAge(bufferData.clickTimestamps, now, age);
+      int attacks = countAtAge(bufferData.attackTimestamps, now, age);
+      int places = countAtAge(bufferData.placeTimestamps, now, age);
+      TickSample sample = resolveTickSample(clicks, attacks, places);
+      bufferData.append(sample.action, sample.intensity);
+    }
+  }
+
+  private static int countAtAge(List<Long> timestamps, long now, int age) {
+    int count = 0;
+    for (long timestamp : timestamps) {
+      if ((int) ((now - timestamp) / 50f) == age) {
+        count++;
+      }
+    }
+    return count;
+  }
+
+  private static TickSample resolveTickSample(int clicks, int attacks, int places) {
+    if (attacks > 0) {
+      return new TickSample(TickAction.ATTACK, attacks);
+    } else if (places > 0) {
+      return new TickSample(TickAction.PLACE, places);
+    } else if (clicks > 0) {
+      return new TickSample(TickAction.CLICK, clicks);
+    }
+    return new TickSample(TickAction.NOTHING, 0);
+  }
+
+  private static final class TickSample {
+    private final TickAction action;
+    private final int intensity;
+
+    private TickSample(TickAction action, int intensity) {
+      this.action = action;
+      this.intensity = intensity;
+    }
   }
 
   public static class ClickBufferData {
@@ -171,6 +261,9 @@ public final class ClickFeeder implements EventProcessor {
     private final List<Integer> tickIntensity = new LinkedList<>();
     private final List<Boolean> unreliableTicks = new LinkedList<>();
     private final List<Integer> streakLength = new LinkedList<>();
+    private final List<Long> clickTimestamps = new ArrayList<>();
+    private final List<Long> attackTimestamps = new ArrayList<>();
+    private final List<Long> placeTimestamps = new ArrayList<>();
     private int clicks, attacks, places;
     private boolean breakingBlock;
     private boolean desynchronizedClick;
@@ -182,6 +275,12 @@ public final class ClickFeeder implements EventProcessor {
     private final String[] tabNames = {"Basic", "History", "Streak", "Stats"};
     private int tab = 0;
     private long lastMove;
+    private PacketType lastMovePacketType;
+    private long lastTickTimeStamp = System.currentTimeMillis();
+    private boolean hasReportedPosition;
+    private double lastReportedPositionX;
+    private double lastReportedPositionY;
+    private double lastReportedPositionZ;
 
     private int currentClickStreak;
 
@@ -221,6 +320,29 @@ public final class ClickFeeder implements EventProcessor {
       tickActions.add(action);
       tickIntensity.remove(0);
       tickIntensity.add(intensity);
+    }
+
+    void recordClick(long timestamp) {
+      clicks++;
+      clickTimestamps.add(timestamp);
+    }
+
+    void recordAttack(long timestamp) {
+      attacks++;
+      attackTimestamps.add(timestamp);
+    }
+
+    void recordPlace(long timestamp) {
+      places++;
+      placeTimestamps.add(timestamp);
+    }
+
+    TickAction actionAtAge(int age) {
+      return tickActions.get(tickActions.size() - 1 - age);
+    }
+
+    int intensityAtAge(int age) {
+      return tickIntensity.get(tickIntensity.size() - 1 - age);
     }
 
     public String buildActionBar() {

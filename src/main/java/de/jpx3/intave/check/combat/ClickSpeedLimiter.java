@@ -22,6 +22,7 @@ import de.jpx3.intave.module.linker.packet.PacketSubscription;
 import de.jpx3.intave.module.tracker.player.AbilityTracker;
 import de.jpx3.intave.module.violation.Violation;
 import de.jpx3.intave.module.violation.ViolationContext;
+import de.jpx3.intave.packet.PacketTypes;
 import de.jpx3.intave.packet.reader.EntityUseReader;
 import de.jpx3.intave.user.User;
 import de.jpx3.intave.user.meta.AbilityMetadata;
@@ -36,13 +37,11 @@ import java.util.List;
 import static de.jpx3.intave.module.linker.packet.PacketId.Client.*;
 
 public final class ClickSpeedLimiter extends MetaCheck<ClickSpeedLimiter.ClickSpeedLimiterMeta> {
-  private final IntavePlugin plugin;
-  private final int maxCPS;
+	private final int maxCPS;
 
   public ClickSpeedLimiter(IntavePlugin plugin) {
     super("ClickSpeedLimiter", "clickspeedlimiter", ClickSpeedLimiterMeta.class);
-    this.plugin = plugin;
-    this.maxCPS = configuration().settings().intInBoundsBy("max-cps", 8, 40, 20);
+	  this.maxCPS = configuration().settings().intInBoundsBy("max-cps", 8, 40, 20);
   }
 
   @PacketSubscription(
@@ -71,7 +70,7 @@ public final class ClickSpeedLimiter extends MetaCheck<ClickSpeedLimiter.ClickSp
   @PacketSubscription(
     priority = ListenerPriority.HIGH,
     packetsIn = {
-      FLYING, LOOK, POSITION, POSITION_LOOK
+      FLYING, LOOK, POSITION, POSITION_LOOK, CLIENT_TICK_END
     }
   )
   public void clientTickUpdate(PacketEvent event) {
@@ -80,6 +79,12 @@ public final class ClickSpeedLimiter extends MetaCheck<ClickSpeedLimiter.ClickSp
     User user = userOf(player);
     ClickSpeedLimiterMeta meta = metaOf(user);
     PacketType pt = event.getPacketType();
+    ProtocolMetadata protocol = user.meta().protocol();
+    boolean sendsClientTickEnd = protocol.sendsClientTickEnd();
+    boolean clientTickEnd = PacketTypes.isClientEndTick(pt);
+    if (sendsClientTickEnd && !clientTickEnd) {
+      return;
+    }
 
     AbilityMetadata abilities = user.meta().abilities();
 
@@ -87,60 +92,30 @@ public final class ClickSpeedLimiter extends MetaCheck<ClickSpeedLimiter.ClickSp
       return;
     }
 
+    boolean positionReminderPacket = user.protocolVersion() > ProtocolMetadata.VER_1_8
+      && !sendsClientTickEnd
+      && isPositionReminderPacket(event, meta, protocol);
+
     if (user.protocolVersion() <= ProtocolMetadata.VER_1_8) {
       // 1.8
       meta.countAccuratePositionPackets = 20;
+    } else if (sendsClientTickEnd) {
+      meta.attackCountArray[meta.attackArrayIndex] = meta.attacksDuringFlyingPackets.size();
+      meta.countAccuratePositionPackets++;
     } else if (meta.lastMovePacketType != null) {
       // 1.9+
       SimulationEnvironment movementData = user.meta().movement();
 
-      if (movementData.receivedFlyingPacketIn(0)
+      if (positionReminderPacket
+        || movementData.receivedFlyingPacketIn(0)
         || meta.lastMovePacketType.name().equals("FLYING") || meta.lastMovePacketType == PacketType.Play.Client.LOOK
       ) {
         meta.countAccuratePositionPackets = 0;
-
         long now = System.currentTimeMillis();
-        long timeDiff = now - meta.lastTickTimeStamp;
-        int ticks = (int) (timeDiff / 50f);
-
-        int newIndex = meta.attackArrayIndex + ticks;
-        while (newIndex > 19)
-          newIndex -= 20;
-        while (newIndex < 0)
-          newIndex += 20;
-        meta.attackArrayIndex = newIndex;
-
-        // Delete all hits from the attackCountArray that were between the last packet move and now
-        // Fill the attackCountArray with all entries from the attacksDuringFlyingPackets list
-
-        //TODO: If you stand still and move on again, the cps on 1.9+ go up although they are not that high
-        for (int i = 1; i <= ticks; i++) {
-          int index = meta.attackArrayIndex - i;
-
-          while (index > 19)
-            index -= 20;
-          while (index < 0)
-            index += 20;
-
-          meta.attackCountArray[index] = 0;
-//          player.sendMessage("" + index + " " + meta.attackArrayIndex);
-        }
-
-        for (long timeStampFromAttack : meta.attacksDuringFlyingPackets) {
-          timeDiff = now - timeStampFromAttack;
-          ticks = (int) (timeDiff / 50f);
-
-          if (ticks < 20) {
-            int index = meta.attackArrayIndex - ticks;
-
-            while (index > 19)
-              index -= 20;
-            while (index < 0)
-              index += 20;
-
-            meta.attackCountArray[index]++;
-          }
-        }
+        int ticksToAdvance = positionReminderPacket
+          ? 20
+          : (int) ((now - meta.lastTickTimeStamp) / 50f);
+        redistributeAttacks(meta, now, ticksToAdvance);
       } else {
         meta.attackCountArray[meta.attackArrayIndex] = meta.attacksDuringFlyingPackets.size();
         meta.countAccuratePositionPackets++;
@@ -174,6 +149,79 @@ public final class ClickSpeedLimiter extends MetaCheck<ClickSpeedLimiter.ClickSp
     prepareNextTick(meta, pt);
   }
 
+  private boolean isPositionReminderPacket(
+    PacketEvent event, ClickSpeedLimiterMeta meta, ProtocolMetadata protocol
+  ) {
+    PacketType packetType = event.getPacketType();
+    if (packetType != PacketType.Play.Client.POSITION
+      && packetType != PacketType.Play.Client.POSITION_LOOK
+    ) {
+      return false;
+    }
+
+    double positionX = event.getPacket().getDoubles().read(0);
+    double positionY = event.getPacket().getDoubles().read(1);
+    double positionZ = event.getPacket().getDoubles().read(2);
+    boolean reminder = meta.hasReportedPosition && isWithinPositionReminderThreshold(
+      protocol.protocolVersion(),
+      positionX - meta.lastReportedPositionX,
+      positionY - meta.lastReportedPositionY,
+      positionZ - meta.lastReportedPositionZ
+    );
+    meta.hasReportedPosition = true;
+    meta.lastReportedPositionX = positionX;
+    meta.lastReportedPositionY = positionY;
+    meta.lastReportedPositionZ = positionZ;
+    return reminder;
+  }
+
+  static boolean isWithinPositionReminderThreshold(
+    int protocolVersion, double offsetX, double offsetY, double offsetZ
+  ) {
+    double distanceSquared = offsetX * offsetX + offsetY * offsetY + offsetZ * offsetZ;
+    // This mirrors the client threshold; a regular update below it is the forced 20-tick reminder.
+    double movementThresholdSquared = protocolVersion >= ProtocolMetadata.VER_1_18_2
+      ? 0.0002 * 0.0002
+      : 9.0E-4;
+    return distanceSquared <= movementThresholdSquared;
+  }
+
+  static void redistributeAttacks(ClickSpeedLimiterMeta meta, long now, int ticksToAdvance) {
+    int newIndex = meta.attackArrayIndex + ticksToAdvance;
+    while (newIndex > 19)
+      newIndex -= 20;
+    while (newIndex < 0)
+      newIndex += 20;
+    meta.attackArrayIndex = newIndex;
+
+    for (int i = 1; i <= ticksToAdvance; i++) {
+      int index = meta.attackArrayIndex - i;
+
+      while (index > 19)
+        index -= 20;
+      while (index < 0)
+        index += 20;
+
+      meta.attackCountArray[index] = 0;
+    }
+
+    for (long timeStampFromAttack : meta.attacksDuringFlyingPackets) {
+      long timeDiff = now - timeStampFromAttack;
+      int ticks = (int) (timeDiff / 50f);
+
+      if (ticks < 20) {
+        int index = meta.attackArrayIndex - ticks;
+
+        while (index > 19)
+          index -= 20;
+        while (index < 0)
+          index += 20;
+
+        meta.attackCountArray[index]++;
+      }
+    }
+  }
+
   private void prepareNextTick(ClickSpeedLimiterMeta meta, PacketType pt) {
     meta.attacksDuringFlyingPackets.clear();
     meta.lastMovePacketType = pt;
@@ -194,5 +242,9 @@ public final class ClickSpeedLimiter extends MetaCheck<ClickSpeedLimiter.ClickSp
     int attackArrayIndex = 0;
     long lastTickTimeStamp = System.currentTimeMillis();
     int countAccuratePositionPackets;
+    boolean hasReportedPosition;
+    double lastReportedPositionX;
+    double lastReportedPositionY;
+    double lastReportedPositionZ;
   }
 }
