@@ -43,6 +43,7 @@ public final class BlockVariantRegister {
     if (IntaveControl.DEBUG_VARIANT_COMPILATION) {
       System.out.println("[variant/debug] Indexed " + count + " variations of " + blockCount + " blocks");
     }
+    BlockVariantReverseLookup.invalidateCache();
     // After initialization, we usually don't need most of the cache anymore
     // So we can clear it after startup to lower memory usage
     StartupTasks.add(BlockVariantRegister::invalidateShadowedVariantCache);
@@ -80,6 +81,7 @@ public final class BlockVariantRegister {
     Map<Material, Map<Integer, BlockVariant>> variants
   ) {
     blockVariants.clear();
+    BlockVariantReverseLookup.invalidateCache();
     blockVariants.putAll(variants);
   }
 
@@ -99,6 +101,14 @@ public final class BlockVariantRegister {
     return integer == null ? -1 : integer;
   }
 
+  public static Map<String, Comparable<?>> propertiesOf(Material type, int variantIndex) {
+    return variantOf(type, variantIndex).properties();
+  }
+
+  public static int variantIdOfProperties(Material type, Map<String, ? extends Comparable<?>> properties) {
+    return BlockVariantReverseLookup.variantIdOfProperties(type, properties);
+  }
+
   public static Object rawVariantOf(Material type, int variantIndex) {
     try {
       return blockDataRegister.get(type).get(variantIndex);
@@ -110,10 +120,16 @@ public final class BlockVariantRegister {
   }
 
   public static Set<Integer> variantIdsOf(Material type) {
-    return new HashSet<>(blockDataRegister.get(type).keySet());
+    Map<Integer, BlockVariant> cachedVariants = blockVariants.get(type);
+    if (cachedVariants != null) {
+      return new HashSet<>(cachedVariants.keySet());
+    }
+    Map<Integer, Object> registeredVariants = blockDataRegister.get(type);
+    return registeredVariants == null ? new HashSet<>() : new HashSet<>(registeredVariants.keySet());
   }
 
   static void invalidateShadowedVariantCache() {
     blockVariants.clear();
+    BlockVariantReverseLookup.invalidateCache();
   }
 }

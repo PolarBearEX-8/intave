@@ -17,6 +17,7 @@ public final class BlockShapePatcher {
 
   public static void setup() {
     add(TrapdoorBlockPatch.class);
+    add(DoorBlockPatch.class);
     add(AnvilBlockPatch.class);
     add(LadderBlockPatch.class);
     add(LilyPadBlockPatch.class);
@@ -36,7 +37,6 @@ public final class BlockShapePatcher {
     add(TorchPatch.class);
     add(MudPatch.class);
 //    add(StairPatch.class);
-//    add(BlockDoorPatch.class);
   }
 
   private static void add(Class<? extends BlockShapePatch> patchClass) {

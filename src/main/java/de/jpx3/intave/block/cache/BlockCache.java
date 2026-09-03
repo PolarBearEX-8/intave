@@ -15,6 +15,7 @@ import de.jpx3.intave.annotate.Nullable;
 import de.jpx3.intave.block.shape.BlockShape;
 import de.jpx3.intave.share.BlockPosition;
 import de.jpx3.intave.share.BlockState;
+import de.jpx3.intave.share.PositionedBlockState;
 import org.bukkit.Material;
 import org.bukkit.World;
 import org.jetbrains.annotations.NotNull;
@@ -159,7 +160,18 @@ public interface BlockCache {
    */
   default void override(World world, int posX, int posY, int posZ, Material type, int variant, String reason) {
 
-  };
+  }
+
+  /**
+   * Override a block at a specific position with a custom type and variant.
+   *
+   * @param world          the world
+   * @param blockState     the selected block state
+   * @param reason         the reason for the override
+   */
+  default void override(World world, PositionedBlockState blockState, String reason) {
+    override(world, blockState.position().getBlockX(), blockState.position().getBlockY(), blockState.position().getBlockZ(), blockState.state().type(), blockState.state().variantIndex(), reason);
+  }
 
   /**
    * Remove all overrides in specified chunk boundaries

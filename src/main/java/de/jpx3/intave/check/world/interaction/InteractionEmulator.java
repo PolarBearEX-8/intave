@@ -22,6 +22,7 @@ import de.jpx3.intave.block.access.VolatileBlockAccess;
 import de.jpx3.intave.block.cache.BlockCache;
 import de.jpx3.intave.block.collision.Collision;
 import de.jpx3.intave.block.fluid.Fluid;
+import de.jpx3.intave.block.interact.BlockInteractionPatches;
 import de.jpx3.intave.block.physics.MaterialMagic;
 import de.jpx3.intave.block.type.BlockTypeAccess;
 import de.jpx3.intave.block.type.MaterialSearch;
@@ -646,8 +647,8 @@ public final class InteractionEmulator implements EventProcessor {
   }
 
   private void emulatePhysicalInteract(Player player, Block block) {
-//    World world = player.getWorld();
-    BlockCache blockStateAccess = userOf(player).blockCache();
+    User user = userOf(player);
+    BlockCache blockStateAccess = user.blockCache();
     Material clickedType = BlockTypeAccess.typeAccess(block, player);
 
     if (DUMP_BLOCK_HITBOX_ON_RIGHT_CLICK) {
@@ -659,62 +660,11 @@ public final class InteractionEmulator implements EventProcessor {
       player.sendMessage(type + "/" + variant + "."+propertyString+" f"+ fluid +" -> " + blockStateAccess.collisionShapeAt(block.getX(), block.getY(), block.getZ()) +"/"+blockStateAccess.outlineShapeAt(block.getX(), block.getY(), block.getZ()));
     }
 
-    switch (clickedType) {
-      case ACACIA_DOOR:
-      case DARK_OAK_DOOR:
-      case BIRCH_DOOR:
-      case JUNGLE_DOOR:
-      case WOOD_DOOR:
-      case WOODEN_DOOR: {
-//        int upperData = BlockVariantNativeAccess.variantAccess(block);
-//        int lowerData;
-//
-//        boolean isUpper = (upperData & 8) != 0;
-//        if (isUpper) {
-//          lowerData = BlockVariantNativeAccess.variantAccess(block = block.getRelative(BlockFace.DOWN));
-//        } else {
-//          lowerData = upperData;
-//          upperData = BlockVariantNativeAccess.variantAccess(block.getRelative(BlockFace.UP));
-//        }
-//
-//        // toggle close
-//        lowerData = (lowerData & 4) != 0 ? lowerData ^ 4 : lowerData | 4;
-//
-//        blockStateAccess.override(world, block.getX(), block.getY(), block.getZ(), clickedType, lowerData);
-//        blockStateAccess.override(world, block.getX(), block.getY() + 1, block.getZ(), clickedType, upperData);
-//
-//        Block finalBlock = block;
-//        Synchronizer.synchronize(() -> {
-//          blockStateAccess.invalidateOverride(finalBlock.getX(), finalBlock.getY() - 1, finalBlock.getZ());
-//          blockStateAccess.invalidateOverride(finalBlock.getX(), finalBlock.getY(), finalBlock.getZ());
-//          blockStateAccess.invalidateOverride(finalBlock.getX(), finalBlock.getY() + 1, finalBlock.getZ());
-//        });
-        break;
-      }
-      case ACACIA_FENCE_GATE:
-      case BIRCH_FENCE_GATE:
-      case DARK_OAK_FENCE_GATE:
-      case FENCE_GATE:
-      case JUNGLE_FENCE_GATE:
-      case SPRUCE_FENCE_GATE: {
-        // TODO
-        break;
-      }
-      case TRAP_DOOR: {
-        // flawed
-//        int data = BlockVariantNativeAccess.variantAccess(block);
-//        boolean newOpen = (data & 4) != 0;
-//        int bitMask = 4;
-//        byte newData = (byte) (!newOpen ? (data | bitMask) : (data & ~bitMask));
-//        Material material = BlockTypeAccess.typeAccess(block, player);
-//        blockStateAccess.override(world, block.getX(), block.getY(), block.getZ(), material, newData);
-//        Block finalBlock1 = block;
-//        Synchronizer.synchronize(() ->
-//          blockStateAccess.invalidateOverride(finalBlock1.getX(), finalBlock1.getY(), finalBlock1.getZ())
-//        );
-        break;
-      }
-    }
+	  BlockInteractionPatches.interact(
+		  user, player.getWorld(), blockStateAccess,
+		  block.getX(), block.getY(), block.getZ(),
+		  "INTERACT_" + clickedType.name()
+	  );
   }
 
   private User userOf(Player player) {

@@ -27,11 +27,18 @@ public interface BlockVariant {
       .build();
 
   default BlockVariant copy() {
+    return new IndexedBlockVariant(index(), properties());
+  }
+
+  default Map<String, Comparable<?>> properties() {
     Map<String, Comparable<?>> properties = new HashMap<>();
     for (String propertyName : propertyNames()) {
-      properties.put(propertyName, propertyOf(propertyName));
+      Comparable<?> value = propertyOf(propertyName);
+      if (value != null) {
+        properties.put(propertyName, value);
+      }
     }
-    return new IndexedBlockVariant(index(), properties);
+    return properties;
   }
 
   Set<String> propertyNames();

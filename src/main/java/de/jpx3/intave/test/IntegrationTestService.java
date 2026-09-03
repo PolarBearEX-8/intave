@@ -18,6 +18,9 @@ import de.jpx3.intave.IntavePlugin;
 import de.jpx3.intave.annotate.HighOrderService;
 import de.jpx3.intave.block.access.BlockAccessTests;
 import de.jpx3.intave.block.fluid.FluidTests;
+import de.jpx3.intave.block.interact.DoorInteractionTests;
+import de.jpx3.intave.block.interact.FenceGateInteractionTests;
+import de.jpx3.intave.block.interact.TrapdoorInteractionTests;
 import de.jpx3.intave.block.shape.resolve.BlockShapeDrillTests;
 import de.jpx3.intave.block.shape.resolve.BlockShapePipelineTests;
 import de.jpx3.intave.block.variant.BlockVariantTests;
@@ -184,6 +187,9 @@ public final class IntegrationTestService implements EventProcessor {
       // parts
       performTest(BlockAccessTests.class);
       performTest(BlockVariantTests.class);
+      performTest(DoorInteractionTests.class);
+      performTest(TrapdoorInteractionTests.class);
+      performTest(FenceGateInteractionTests.class);
       performTest(BlockShapeDrillTests.class);
       performTest(BlockShapePipelineTests.class);
       performTest(EntitySizeTests.class);

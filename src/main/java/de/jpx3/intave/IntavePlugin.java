@@ -31,6 +31,7 @@ import de.jpx3.intave.block.type.BlockTypeAccess;
 import de.jpx3.intave.block.variant.BlockVariantNativeAccess;
 import de.jpx3.intave.block.variant.BlockVariantRegister;
 import de.jpx3.intave.check.CheckService;
+import de.jpx3.intave.block.interact.BlockInteractionPatches;
 import de.jpx3.intave.cleanup.GarbageCollector;
 import de.jpx3.intave.cleanup.ShutdownTasks;
 import de.jpx3.intave.cleanup.StartupTasks;
@@ -287,6 +288,7 @@ public final class IntavePlugin extends JavaPlugin {
       BlockPhysics.setup();
       ItemProperties.setup();
       BlockShapePatcher.setup();
+      BlockInteractionPatches.setup();
       EntityLookup.setup();
 
       versions = new IntaveVersionList();
