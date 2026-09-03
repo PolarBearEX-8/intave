@@ -13,6 +13,7 @@ package de.jpx3.intave.block.tick;
 
 import de.jpx3.intave.block.tick.piston.PistonSlimePhysics;
 import de.jpx3.intave.check.movement.physics.environment.SimulationEnvironment;
+import de.jpx3.intave.diagnostic.timings.Timings;
 import de.jpx3.intave.share.Motion;
 import de.jpx3.intave.share.Position;
 import de.jpx3.intave.user.User;
@@ -27,11 +28,19 @@ public final class BlockTickEntities {
 		Position position,
 		Motion motion
 	) {
-		Motion result = PistonSlimePhysics.applyAfterPlayerTick(
-			user, environment, position, motion
-		);
-		return ShulkerBoxPhysics.applyAfterPlayerTick(
-			user, environment, environment.position(), result
-		);
+		Timings.CHECK_PHYSICS_SIMULATOR_BLOCK_TICK_ENTITIES.start();
+		try {
+			Motion result = PistonSlimePhysics.applyAfterPlayerTick(
+				user, environment, position, motion
+			);
+			result = ShulkerBoxPhysics.applyAfterPlayerTick(
+				user, environment, environment.position(), result
+			);
+			return SulfurGeyserPhysics.applyAfterPlayerTick(
+				user, environment, environment.position(), result
+			);
+		} finally {
+			Timings.CHECK_PHYSICS_SIMULATOR_BLOCK_TICK_ENTITIES.stop();
+		}
 	}
 }

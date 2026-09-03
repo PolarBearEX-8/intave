@@ -1,5 +1,6 @@
 package de.jpx3.intave.player.fake;
 
+import de.jpx3.intave.adapter.MinecraftVersions;
 import de.jpx3.intave.executor.Synchronizer;
 import de.jpx3.intave.klass.Lookup;
 import org.bukkit.Bukkit;
@@ -16,7 +17,10 @@ import java.util.stream.IntStream;
  * So we reserve us a bunch of ids so we can use them later
  */
 public final class IdentifierReserve {
-  private static final Field ENTITY_COUNT_FIELD = Lookup.serverField("Entity", "entityCount");
+  private static final Field ENTITY_COUNT_FIELD = Lookup.serverField(
+    MinecraftVersions.VER26_2.atOrAbove() ? "WorldServer" : "Entity",
+    "entityCount"
+  );
   private static final int REQUIRED_ID_POOL_SIZE = 25;
 
   private static final Queue<Integer> availableIds = new ConcurrentLinkedDeque<>();

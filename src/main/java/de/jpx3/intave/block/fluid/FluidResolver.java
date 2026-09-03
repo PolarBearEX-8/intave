@@ -9,10 +9,16 @@ public interface FluidResolver {
     boolean isWater,
     boolean isLava,
     boolean dry,
+    boolean source,
     boolean falling,
     float height,
     int level
   ) {
+    if (source) {
+      // Keep source state in the existing serialized level/falling representation.
+      level = 0;
+      falling = false;
+    }
     if (dry) {
       return Dry.of();
     } else if (isWater) {

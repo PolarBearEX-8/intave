@@ -155,6 +155,42 @@ final class MovementRecordingWindowTest {
 		assertTrue(tail.frames().get(2).blocks().isEmpty());
 	}
 
+	@Test
+	void recordingCapturesTheFullGeyserDepthBelowThePlayer() {
+		MovementRecording recording = MovementRecording.create();
+		MockFullBlockStaticPlane blockCache =
+			MockFullBlockStaticPlane.createWithHorizontalPlaneAt(40);
+
+		recording.insertFrame(
+			BoundingBox.fromBounds(-0.3D, 64.5D, -0.3D, 0.3D, 66.3D, 0.3D),
+			Input.none(), new Position(0.0D, 64.5D, 0.0D), Rotation.zero(),
+			blockCache, false
+		);
+
+		assertEquals(
+			MaterialVariantStore.of(Material.STONE, 0),
+			recording.frames().get(0).blocks().get(new BlockPosition(0, 40, 0))
+		);
+	}
+
+	@Test
+	void tailRetainsTheFullGeyserDepthWithoutKeepingDeeperBlocks() {
+		BlockPosition deepestGeyserBlock = new BlockPosition(0, 40, 0);
+		BlockPosition deeperBlock = new BlockPosition(0, 39, 0);
+		Map<BlockPosition, MaterialVariantStore> initialBlocks = blocks(
+			deepestGeyserBlock, MaterialVariantStore.of(Material.STONE, 0)
+		);
+		initialBlocks.put(deeperBlock, MaterialVariantStore.of(Material.STONE, 0));
+		MovementRecording source = recording(List.of(frame(
+			new Position(0.0D, 64.5D, 0.0D), Rotation.zero(), initialBlocks
+		)), Collections.emptyList());
+
+		MovementRecording tail = MovementRecordingWindow.tail(source, 1);
+
+		assertTrue(tail.frames().get(0).blocks().containsKey(deepestGeyserBlock));
+		assertFalse(tail.frames().get(0).blocks().containsKey(deeperBlock));
+	}
+
 
 	private static byte[] compressedBytes(MovementRecording recording) throws IOException {
 		ByteBuf buffer = Unpooled.buffer();

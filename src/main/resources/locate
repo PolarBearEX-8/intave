@@ -213,7 +213,7 @@ Entity -> {
     [1.19.4-1.20.4] -> {
       "entityCount" -> "d"
     }
-    [1.21-26.2.0] -> {
+    [1.21-26.1.2] -> {
       "entityCount" -> "ENTITY_COUNTER"
     }
   }
@@ -281,7 +281,7 @@ EntityTypes -> {
   [1.17-1.20.4] -> "net/minecraft/world/entity/EntityTypes"
   [1.21-26.2.0] -> "net/minecraft/world/entity/EntityType"
   methods {
-    [1.21-26.2.0] -> {
+    [1.21-26.1.2] -> {
       "a(Ljava/lang/String;)Ljava/util/Optional;" -> "byString(Ljava/lang/String;)Ljava/util/Optional;"
     }
   }
@@ -917,6 +917,11 @@ World -> {
 WorldServer -> {
   [1.17-1.20.4] -> "net/minecraft/server/level/WorldServer"
   [1.21-26.2.0] -> "net/minecraft/server/level/ServerLevel"
+  fields {
+    26.2 -> {
+      "entityCount" -> "ENTITY_COUNTER"
+    }
+  }
   methods {
     [1.18-1.20.4] -> {
       "rayTrace(RRayTrace;)RMovingObjectPositionBlock;" -> "a(RRayTrace;)RMovingObjectPositionBlock;"

@@ -23,7 +23,7 @@ plugins {
   id("com.github.gmazzo.buildconfig") version "6.0.9"
   id("net.minecrell.plugin-yml.bukkit") version "0.6.0"
   id("com.gradleup.shadow") version "9.4.1"
-  id("xyz.jpenilla.run-paper") version "3.0.2"
+  id("xyz.jpenilla.run-paper") version "3.1.0"
 }
 
 val gitTag by lazy {
@@ -77,7 +77,7 @@ dependencies {
   )
 
   testRuntimeOnly("it.unimi.dsi:fastutil:8.5.12")
-  testImplementation("org.spigotmc:spigot-api:26.1.2-R0.1-SNAPSHOT")
+  testImplementation("org.spigotmc:spigot-api:26.2-R0.1-SNAPSHOT")
   testImplementation("net.dmulloy2:ProtocolLib:5.4.0")
   testImplementation("io.netty:netty-all:4.2.15.Final")
 
@@ -342,6 +342,9 @@ val paperRunConfigs = mapOf(
 val foliaRunConfigs = mapOf(
   Pair("26.1.2", 25)
 )
+
+val protocolLibPreloadVersions = setOf("1.21.11", "26.1.2", "26.2")
+val protocolLibDevUrl = "https://github.com/dmulloy2/ProtocolLib/releases/download/dev-build/ProtocolLib.jar"
 
 data class McpRebornJvm(
   val gradleJava: Int,
@@ -704,6 +707,11 @@ fun registerPaperTestTask(serverVersion: String, javaVersion: Int) {
     if (serverVersion == "1.21.7") {
       serverJar(File("libs/servers/paper-1.21.7-15.jar"))
     }
+    if (serverVersion in protocolLibPreloadVersions) {
+      downloadPlugins {
+        url(protocolLibDevUrl)
+      }
+    }
     runDirectory(File("runs/test_${serverVersion}-j$javaVersion"))
     jvmArgs("-Dcom.mojang.eula.agree=true")
     jvmArgs("-Dintave.test.success=shutdown")
@@ -745,6 +753,9 @@ fun registerPaperRunTask(serverVersion: String, javaVersion: Int) {
       serverJar(File("libs/servers/paper-1.21.7-15.jar"))
     }
     downloadPlugins {
+      if (serverVersion in protocolLibPreloadVersions) {
+        url(protocolLibDevUrl)
+      }
       modrinth("viaversion", "5.11.0")
       modrinth("viabackwards", "5.11.0")
     }

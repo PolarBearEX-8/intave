@@ -773,7 +773,7 @@ final class MovementRecordingPhysicsTests {
 				case "getAllowFlight" -> replayPlayerState.state().abilities().allowFlying();
 				case "getFlySpeed" -> replayPlayerState.state().abilities().flySpeed() * 2.0F;
 				case "getGameMode" -> replayPlayerState.state().abilities().gameMode();
-				case "isOnGround" -> false;
+				case "isOnGround", "isDead" -> false;
 				default -> null;
 			}
 		);

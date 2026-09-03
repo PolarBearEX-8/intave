@@ -24,6 +24,32 @@ final class FluidCodecTest {
 		assertEquals(0.75F, decoded.height(), 0.0F);
 		assertEquals(3, decoded.level());
 		assertFalse(decoded.falling());
+		assertFalse(decoded.isSource());
+	}
+
+	@Test
+	void sourceWaterRoundTripsInTheExistingFluidLayout() {
+		Fluid decoded = roundTrip(Water.of(0.8888889F, 0, false));
+
+		assertTrue(decoded.isSource());
+	}
+
+	@Test
+	void fallingLevelZeroWaterIsNotASource() {
+		assertFalse(Water.of(1.0F, 0, true).isSource());
+	}
+
+	@Test
+	void nativeSourceStateUsesTheExistingSerializableRepresentation() {
+		FluidResolver resolver = (type, variantIndex) -> Dry.of();
+		Fluid source = resolver.select(
+			true, false, false, true, true,
+			0.8888889F, 8
+		);
+
+		assertEquals(0, source.level());
+		assertFalse(source.falling());
+		assertTrue(roundTrip(source).isSource());
 	}
 
 	@Test
@@ -35,6 +61,7 @@ final class FluidCodecTest {
 		assertEquals(0.5F, decoded.height(), 0.0F);
 		assertEquals(8, decoded.level());
 		assertTrue(decoded.falling());
+		assertFalse(decoded.isSource());
 	}
 
 	@Test

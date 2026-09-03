@@ -46,6 +46,8 @@ import java.util.zip.InflaterInputStream;
 import static de.jpx3.intave.share.ClientMath.floor;
 
 public final class MovementRecording {
+	private static final double BLOCK_CAPTURE_RADIUS = 6.0D;
+	private static final int GEYSER_CAPTURE_DEPTH = 24;
 	private static final MaterialVariantStore AIR = MaterialVariantStore.air();
 	private static final StreamCodec<ByteBuf, ByteBuf, Map<Material, Map<Integer, BlockShape>>> COLLISION_SHAPES_CODEC = ByteBufStreamCodecs.mapCodec(ByteBufStreamCodecs.MATERIAL, ByteBufStreamCodecs.mapCodec(ByteBufStreamCodecs.INTEGER, BlockShape.STREAM_CODEC));
 
@@ -236,12 +238,37 @@ public final class MovementRecording {
 		}
 
 		Map<BlockPosition, MaterialVariantStore> delta = new HashMap<>();
-		int minX = floor(boundingBox.minX - 6.0D);
-		int minY = floor(boundingBox.minY - 6.0D);
-		int minZ = floor(boundingBox.minZ - 6.0D);
-		int maxX = floor(boundingBox.maxX + 6.0D);
-		int maxY = floor(boundingBox.maxY + 6.0D);
-		int maxZ = floor(boundingBox.maxZ + 6.0D);
+		int minX = floor(boundingBox.minX - BLOCK_CAPTURE_RADIUS);
+		int minY = floor(boundingBox.minY - BLOCK_CAPTURE_RADIUS);
+		int minZ = floor(boundingBox.minZ - BLOCK_CAPTURE_RADIUS);
+		int maxX = floor(boundingBox.maxX + BLOCK_CAPTURE_RADIUS);
+		int maxY = floor(boundingBox.maxY + BLOCK_CAPTURE_RADIUS);
+		int maxZ = floor(boundingBox.maxZ + BLOCK_CAPTURE_RADIUS);
+		captureBlocks(blockCache, delta, minX, minY, minZ, maxX, maxY, maxZ);
+
+		int geyserMinX = floor(boundingBox.minX);
+		int geyserMinY = floor(boundingBox.minY) - GEYSER_CAPTURE_DEPTH;
+		int geyserMinZ = floor(boundingBox.minZ);
+		int geyserMaxX = (int) Math.ceil(boundingBox.maxX) - 1;
+		int geyserMaxZ = (int) Math.ceil(boundingBox.maxZ) - 1;
+		captureBlocks(
+			blockCache, delta,
+			geyserMinX, geyserMinY, geyserMinZ,
+			geyserMaxX, minY - 1, geyserMaxZ
+		);
+		return delta;
+	}
+
+	private void captureBlocks(
+		BlockCache blockCache,
+		Map<BlockPosition, MaterialVariantStore> delta,
+		int minX,
+		int minY,
+		int minZ,
+		int maxX,
+		int maxY,
+		int maxZ
+	) {
 		for (int x = minX; x <= maxX; x++) {
 			for (int y = minY; y <= maxY; y++) {
 				for (int z = minZ; z <= maxZ; z++) {
@@ -249,7 +276,6 @@ public final class MovementRecording {
 				}
 			}
 		}
-		return delta;
 	}
 
 	private void captureBlock(BlockCache blockCache, Map<BlockPosition, MaterialVariantStore> delta, int x, int y, int z) {

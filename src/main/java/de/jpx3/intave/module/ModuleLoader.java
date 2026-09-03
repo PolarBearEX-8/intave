@@ -63,6 +63,7 @@ final class ModuleLoader {
     prepareModule("de.jpx3.intave.module.tracker.entity.LazyEntityCollisionService", defaultBoot);
     prepareModule("de.jpx3.intave.module.tracker.entity.EntityCollisionDisabler", defaultBoot);
     prepareModule("de.jpx3.intave.module.tracker.block.BlockUpdateTracker", defaultBoot);
+//    prepareModule("de.jpx3.intave.module.tracker.block.BlockTagTracker", defaultBoot);
 
     // mitigate
     prepareModule("de.jpx3.intave.module.mitigate.CombatMitigator", defaultBoot);

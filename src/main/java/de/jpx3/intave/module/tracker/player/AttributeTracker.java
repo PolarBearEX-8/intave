@@ -51,7 +51,9 @@ public final class AttributeTracker extends Module {
       List<AttributeModifier> intaveAttributes = abilities.modifiersOf(intaveAttribute);
       intaveAttributes.clear();
       Set<AttributeModifier> serverAttributes = intaveAttribute.modifiers();
-      movement.hasSprintSpeed = serverAttributes.contains(MovementMetadata.SPRINTING_MODIFIER);
+      if (abilities.findAttribute(attributeKey) == abilities.findAttribute("generic.movementSpeed")) {
+        movement.hasSprintSpeed = serverAttributes.contains(MovementMetadata.SPRINTING_MODIFIER);
+      }
       intaveAttributes.addAll(new HashSet<>(serverAttributes));
       abilities.modifyBaseValue(attributeKey, attribute.getBaseValue());
     }

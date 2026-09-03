@@ -54,7 +54,7 @@ final class Water implements Fluid {
 
   @Override
   public boolean isSource() {
-    return false;
+    return level == 0 && !falling;
   }
 
   @Override

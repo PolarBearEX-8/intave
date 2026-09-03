@@ -19,6 +19,7 @@ import de.jpx3.intave.block.inside.EntityMovement;
 import de.jpx3.intave.block.physics.BlockPhysics;
 import de.jpx3.intave.block.physics.BlockProperties;
 import de.jpx3.intave.block.shape.BlockShape;
+import de.jpx3.intave.block.type.MaterialSearch;
 import de.jpx3.intave.check.movement.physics.config.MovementConfiguration;
 import de.jpx3.intave.check.movement.physics.environment.MovementCharacteristics;
 import de.jpx3.intave.check.movement.physics.environment.Pose;
@@ -475,10 +476,9 @@ class BaseSimulator extends Simulator {
 //    }
     Player player = user.player();
     MetadataBundle meta = user.meta();
-    ProtocolMetadata clientData = meta.protocol();
-    Pose pose = environment.pose();
+    ProtocolMetadata protocol = meta.protocol();
 
-    if (environment.motionMultiplier() != null) {
+	  if (environment.motionMultiplier() != null) {
       motion.setNull();
       environment.resetMotionMultiplier();
     }
@@ -489,14 +489,26 @@ class BaseSimulator extends Simulator {
     double lavaDepthBeforeMove = environment.lavaDepth();
 	  double gravity = environment.gravity();
     double slipperiness;
+    boolean movementAttributes = protocol.supportsMovementAttributes();
+    float airDragModifier = movementAttributes ? (float) meta.abilities().airDragModifier() : 1.0F;
+    float airDrag = movementAttributes ? MovementCharacteristics.computeModifiedFriction(0.91F, airDragModifier) : 0.91F;
 
     if (environment.lastOnGround()) {
       double blockPositionX = floor(environment.verifiedLastPositionX());
       double blockPositionY = floor(environment.verifiedLastPositionY() - environment.frictionPosSubtraction());
       double blockPositionZ = floor(environment.verifiedLastPositionZ());
-      slipperiness = MovementCharacteristics.currentSlipperiness(user, player.getWorld(), blockPositionX, blockPositionY, blockPositionZ);
+      float blockFriction = MovementCharacteristics.currentBlockFriction(
+        user, environment, player.getWorld(), blockPositionX, blockPositionY, blockPositionZ
+      );
+      if (movementAttributes) {
+        blockFriction = MovementCharacteristics.computeModifiedFriction(
+          blockFriction,
+          (float) meta.abilities().frictionModifier()
+        );
+      }
+      slipperiness = blockFriction * airDrag;
     } else {
-      slipperiness = 0.91f;
+      slipperiness = airDrag;
     }
 
     BoundingBox boundingBox = BoundingBox.fromPosition(user, environment, position);
@@ -528,11 +540,15 @@ class BaseSimulator extends Simulator {
 
     updateFallStateAfter(user, environment, motion, environment.onGround());
 
-    if (environment.motionXReset()) {
-      motion.setMotionX(0.0);
-    }
-    if (environment.motionZReset()) {
-      motion.setMotionZ(0.0);
+    if (movementAttributes) {
+      restituteMovementAfterCollisions(user, environment, result, motion, gravity, airDragModifier);
+    } else {
+      if (environment.motionXReset()) {
+        motion.setMotionX(0.0);
+      }
+      if (environment.motionZReset()) {
+        motion.setMotionZ(0.0);
+      }
     }
 
     simulateMovementOfCollidedBlocksAfter(user, environment, configuration, motion);
@@ -545,7 +561,10 @@ class BaseSimulator extends Simulator {
         fallingBeforeMove, lavaDepthBeforeMove
       );
     } else if (!elytraFlying) {
-      simulateNormalAfter(user, environment, configuration, motion, gravity, slipperiness);
+      simulateNormalAfter(
+        user, environment, configuration, motion, gravity,
+        slipperiness, movementAttributes, airDragModifier
+      );
     }
 
     if (user.meta().protocol().newBlockEntityIntersectionLogic()) {
@@ -553,12 +572,12 @@ class BaseSimulator extends Simulator {
       applyEffectsFromBlocks(user, environment, configuration, motion);
     }
 
-    if (clientData.combatUpdate()
+    if (protocol.combatUpdate()
       && MinecraftVersions.VER1_9_0.atOrAbove() /* todo: add scoreboard check */) {
       performGlobalEntityPush(user, environment, motion, boundingBox);
     }
 
-    if (clientData.fireworkBoostTicksAfterPlayer()
+    if (protocol.fireworkBoostTicksAfterPlayer()
       && environment.shouldHaveFallFlyingPose()) {
       applyAttachedFireworkBoosts(
         motion,
@@ -610,7 +629,8 @@ class BaseSimulator extends Simulator {
     BlockPhysics.fallenUpon(user, block);
 
     // onLanded
-    if (environment.collidedVertically()) {
+    if (!clientData.supportsMovementAttributes()
+      && environment.collidedVertically()) {
       Motion collisionVector = BlockPhysics.blockLanded(
         user, environment, block, motion.motionX, environment.baseMotionY(), motion.motionZ
       );
@@ -640,6 +660,74 @@ class BaseSimulator extends Simulator {
         motion.motionZ *= speedFactor;
       }
     }
+  }
+
+  private final static Material HONEY_BLOCK = MaterialSearch.materialThatIsNamed("HONEY_BLOCK");
+
+  private void restituteMovementAfterCollisions(
+    User user,
+    SimulationEnvironment environment,
+    SimulationResult result,
+    Motion motion,
+    double gravity,
+    float airDragModifier
+  ) {
+    if (result == null) {
+      return;
+    }
+
+    Motion collisionInput = result.intermittentResult() == null
+      ? result.actualMotion()
+      : result.intermittentResult();
+    Motion clippedMovement = result.offsetMotion();
+    boolean xCollision = !similar(collisionInput.motionX, clippedMovement.motionX);
+    boolean zCollision = !similar(collisionInput.motionZ, clippedMovement.motionZ);
+    boolean horizontalCollision = xCollision || zCollision;
+    boolean movedVertically = Math.abs(collisionInput.motionY) > 0.0D;
+    if (!(movedVertically && result.collidedVertically()) && !horizontalCollision) {
+      return;
+    }
+
+    boolean suppressingBounce = environment.isSneaking();
+    double restitution = suppressingBounce ? 0.0D : user.meta().abilities().bounciness();
+    double currentMotionX = collisionInput.motionX;
+    double currentMotionY = collisionInput.motionY;
+    double currentMotionZ = collisionInput.motionZ;
+    if (xCollision) {
+      motion.motionX = -currentMotionX * restitution;
+    }
+    if (zCollision) {
+      motion.motionZ = -currentMotionZ * restitution;
+    }
+
+    if (result.collidedVertically()) {
+      if (result.onGround()) {
+        Material effectBlock = environment.collideMaterial();
+        restitution = !(-currentMotionY < gravity)
+          && !suppressingBounce
+          && !HONEY_BLOCK.equals(effectBlock)
+          ? Math.max(restitution, BlockProperties.of(effectBlock).bounceRestitution())
+          : 0.0D;
+      }
+
+      double gravityCompensation;
+      double effectiveDrag;
+      if (restitution > 0.0D) {
+        double portionWithMovement = result.offsetMotion().motionY / currentMotionY;
+        gravityCompensation = portionWithMovement * gravity;
+        float airDrag = MovementCharacteristics.computeModifiedFriction(0.98F, airDragModifier);
+        effectiveDrag = 1.0D + portionWithMovement * ((double) airDrag - 1.0D);
+      } else {
+        gravityCompensation = 0.0D;
+        effectiveDrag = 1.0D;
+      }
+
+      motion.motionY = (gravityCompensation - currentMotionY) * effectiveDrag * restitution;
+    }
+  }
+
+  private static boolean similar(double first, double second) {
+    return Math.abs(second - first) < 1.0E-5F;
   }
 
   private void applyStepOnMechanics(
@@ -822,7 +910,11 @@ class BaseSimulator extends Simulator {
     User user,
     SimulationEnvironment environment,
     MovementConfiguration configuration,
-    Motion motion, double gravity, double slipperiness
+    Motion motion,
+    double gravity,
+    double slipperiness,
+    boolean movementAttributes,
+    float airDragModifier
   ) {
     Player player = user.player();
 
@@ -849,7 +941,9 @@ class BaseSimulator extends Simulator {
       motion.motionY -= gravity;
     }
     motion.motionX *= slipperiness;
-    motion.motionY *= 0.98f;
+    motion.motionY *= movementAttributes
+      ? MovementCharacteristics.computeModifiedFriction(0.98F, airDragModifier)
+      : 0.98F;
     motion.motionZ *= slipperiness;
   }
 

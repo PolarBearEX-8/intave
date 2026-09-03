@@ -33,9 +33,10 @@ import java.util.*;
  * its first frame. Tick-based actions also need to be clipped and rebased to the new frame zero.
  */
 public final class MovementRecordingWindow {
-	// Live recordings rasterize the player box grown by two blocks. Sixteen blocks is deliberately
-	// conservative while still preventing old world positions from surviving every rotation.
+	// Live recordings include geyser source columns up to 24 blocks beneath the player. The larger
+	// horizontal and upper radius remains conservative without retaining distant world history.
 	private static final double BLOCK_CONTEXT_RADIUS = 16;
+	private static final int GEYSER_CONTEXT_DEPTH = 24;
 
 	private MovementRecordingWindow() {
 	}
@@ -97,7 +98,10 @@ public final class MovementRecordingWindow {
 		}
 		blocks.entrySet().removeIf(entry -> positions.stream().noneMatch(position -> {
 			BlockPosition block = entry.getKey();
-			return Math.abs(block.getBlockX() - position.getX()) <= BLOCK_CONTEXT_RADIUS && Math.abs(block.getBlockY() - position.getY()) <= BLOCK_CONTEXT_RADIUS && Math.abs(block.getBlockZ() - position.getZ()) <= BLOCK_CONTEXT_RADIUS;
+			return Math.abs(block.getBlockX() - position.getX()) <= BLOCK_CONTEXT_RADIUS
+				&& block.getBlockY() >= Math.floor(position.getY()) - GEYSER_CONTEXT_DEPTH
+				&& block.getBlockY() - position.getY() <= BLOCK_CONTEXT_RADIUS
+				&& Math.abs(block.getBlockZ() - position.getZ()) <= BLOCK_CONTEXT_RADIUS;
 		}));
 	}
 

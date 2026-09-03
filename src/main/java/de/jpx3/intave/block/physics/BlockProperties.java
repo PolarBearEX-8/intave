@@ -35,7 +35,12 @@ public final class BlockProperties {
     ).doesNotBlockMovement().buildAndSave();
     Property.builderFor(ICE, PACKED_ICE, "FROSTED_ICE").slipperiness(0.98f).buildAndSave();
     Property.builderFor("BLUE_ICE").slipperiness(0.989f).buildAndSave();
-    Property.builderFor(SLIME_BLOCK).slipperiness(0.8f).buildAndSave();
+    Property.builderFor(SLIME_BLOCK).slipperiness(0.8f).bounceRestitution(1.0F).buildAndSave();
+    for (Material material : Material.values()) {
+      if (material.name().endsWith("_BED") || material.name().equals("BED_BLOCK")) {
+        Property.builderFor(material).bounceRestitution(0.75F).buildAndSave();
+      }
+    }
     Property.builderFor(LADDER, VINE).climbable().doesNotBlockMovement().buildAndSave();
     Property.builderFor("SCAFFOLDING").climbable().withoutClimbableSneakLimit().doesNotBlockMovement().buildAndSave();
     Property.builderFor("WEEPING_VINES", "WEEPING_VINES_PLANT").climbable().doesNotBlockMovement().buildAndSave();
@@ -66,6 +71,7 @@ public final class BlockProperties {
     private final float slipperiness;
     private final float jumpFactor;
     private final float speedFactor;
+    private final float bounceRestitution;
     private final boolean climbable;
     private final boolean climbableSneakLimit;
     private final boolean soulSpeedAffected;
@@ -73,7 +79,7 @@ public final class BlockProperties {
 
     public Property(
       Material[] materials,
-      float slipperiness, float jumpFactor, float speedFactor,
+      float slipperiness, float jumpFactor, float speedFactor, float bounceRestitution,
       boolean climbable, boolean climbableSneakLimit,
       boolean soulSpeedAffected, boolean suffocates
     ) {
@@ -81,6 +87,7 @@ public final class BlockProperties {
       this.slipperiness = slipperiness;
       this.jumpFactor = jumpFactor;
       this.speedFactor = speedFactor;
+      this.bounceRestitution = bounceRestitution;
       this.climbable = climbable;
       this.climbableSneakLimit = climbableSneakLimit;
       this.soulSpeedAffected = soulSpeedAffected;
@@ -109,6 +116,10 @@ public final class BlockProperties {
 
     public float speedFactor() {
       return speedFactor;
+    }
+
+    public float bounceRestitution() {
+      return bounceRestitution;
     }
 
     public boolean climbable() {
@@ -147,6 +158,7 @@ public final class BlockProperties {
       private float slipperiness = 0.6f;
       private float jumpFactor = 1.0f;
       private float speedFactor = 1.0f;
+      private float bounceRestitution = 0.0F;
       private boolean climbable = false;
       private boolean climbableSneakLimit = true;
       private boolean soulSpeedAffected = false;
@@ -168,6 +180,11 @@ public final class BlockProperties {
 
       public Builder speedFactor(float speedFactor) {
         this.speedFactor = speedFactor;
+        return this;
+      }
+
+      public Builder bounceRestitution(float bounceRestitution) {
+        this.bounceRestitution = bounceRestitution;
         return this;
       }
 
@@ -193,7 +210,7 @@ public final class BlockProperties {
 
       public Property build() {
         return new Property(
-          materials, slipperiness, jumpFactor, speedFactor,
+          materials, slipperiness, jumpFactor, speedFactor, bounceRestitution,
           climbable, climbableSneakLimit, soulSpeedAffected,
           suffocates
         );

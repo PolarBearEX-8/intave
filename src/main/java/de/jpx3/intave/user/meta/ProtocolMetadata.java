@@ -22,6 +22,7 @@ import org.bukkit.entity.Player;
 import java.util.*;
 
 public final class ProtocolMetadata {
+  public static int VER_26_2 = 776; // 26.2
   public static int VER_26_1_1 = 775; // 26.1 - 26.1.1
   public static int VER_1_21_11 = 774; // 1.21.11
   public static int VER_1_21_9 = 773; // 1.21.9 - 1.21.10
@@ -277,6 +278,14 @@ public final class ProtocolMetadata {
 
   public boolean supportsWaterMovementEfficiencyAttribute() {
     return protocolVersion >= VER_1_21;
+  }
+
+  public boolean supportsMovementAttributes() {
+    return protocolVersion >= VER_26_2;
+  }
+
+  public boolean supportsSulfurGeysers() {
+    return protocolVersion >= VER_26_2;
   }
 
   public boolean clientSpeculativeBlocks() {

@@ -54,7 +54,7 @@ final class Lava implements Fluid {
 
   @Override
   public boolean isSource() {
-    return false;
+    return heightIndex == 0 && !falling;
   }
 
   @Override

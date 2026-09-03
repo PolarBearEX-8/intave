@@ -16,6 +16,7 @@ import org.bukkit.craftbukkit.v1_8_R3.entity.CraftEntity;
 import org.bukkit.entity.Entity;
 
 import java.lang.invoke.MethodHandle;
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.Map;
 import java.util.Optional;
@@ -116,6 +117,34 @@ public final class HitboxSizeAccess {
     private static Method widthAccess;
     private static Method heightAccess;
 
+    private static final class EntityTypeLookup26_2 {
+      private static final Object ENTITY_TYPE_REGISTRY;
+      private static final Method PARSE_KEY;
+      private static final Method GET_OPTIONAL;
+
+      static {
+        try {
+          Class<?> keyClass = Lookup.serverClass("MinecraftKey");
+          PARSE_KEY = keyClass.getMethod("tryParse", String.class);
+
+          Field registryField = Lookup.serverField("IRegistry", "ENTITY_TYPE");
+          ENTITY_TYPE_REGISTRY = registryField.get(null);
+          GET_OPTIONAL = ENTITY_TYPE_REGISTRY.getClass().getMethod("getOptional", keyClass);
+        } catch (ReflectiveOperationException exception) {
+          throw new IllegalStateException("Unable to initialize the 26.2 entity type lookup", exception);
+        }
+      }
+
+      private static Optional<?> byString(String id) {
+        try {
+          Object key = PARSE_KEY.invoke(null, id);
+          return (Optional<?>) GET_OPTIONAL.invoke(ENTITY_TYPE_REGISTRY, key);
+        } catch (ReflectiveOperationException exception) {
+          throw new IllegalStateException("Unable to resolve entity type " + id, exception);
+        }
+      }
+    }
+
     @PatchyAutoTranslation
     @Override
     public HitboxSize sizeOf(Class<?> entityClass) {
@@ -123,9 +152,11 @@ public final class HitboxSizeAccess {
       if (className.startsWith("Entity")) {
         className = className.substring("Entity".length());
       }
-      Optional<net.minecraft.server.v1_14_R1.EntityTypes<?>> optional = net.minecraft.server.v1_14_R1.EntityTypes.a(className.toLowerCase());
+      Optional<?> optional = MinecraftVersions.VER26_2.atOrAbove()
+        ? EntityTypeLookup26_2.byString(className.toLowerCase())
+        : net.minecraft.server.v1_14_R1.EntityTypes.a(className.toLowerCase());
       if (optional.isPresent()) {
-        net.minecraft.server.v1_14_R1.EntityTypes<?> entityTypes = optional.get();
+        Object entityTypes = optional.get();
         Object size;
         try {
           size = sizeAccess.invoke(entityTypes);

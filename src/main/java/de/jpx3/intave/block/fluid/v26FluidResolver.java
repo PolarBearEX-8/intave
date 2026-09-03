@@ -73,7 +73,7 @@ public final class v26FluidResolver implements FluidResolver {
 			if (fallingProperty == null) {
 				fallingProperty = MaterialMagic.isLavaOrWater(type) && level >= 8;
 			}
-			return select(isWater, isLava, false, fallingProperty, height, level);
+			return select(isWater, isLava, false, source, fallingProperty, height, level);
 		} catch (Throwable throwable) {
 			throwable.printStackTrace();
 			return Dry.of();

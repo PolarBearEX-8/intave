@@ -110,6 +110,11 @@ public final class AbilityMetadata {
       setupAttribute("generic.movement_efficiency", 0.0D);
       setupAttribute("generic.water_movement_efficiency", 0.0D);
     }
+    if (MinecraftVersions.VER26_2.atOrAbove()) {
+      setupAttribute("generic.air_drag_modifier", 1.0D);
+      setupAttribute("generic.bounciness", 0.0D);
+      setupAttribute("generic.friction_modifier", 1.0D);
+    }
   }
 
   private void setupAttribute(String name, double baseValue) {
@@ -204,13 +209,34 @@ public final class AbilityMetadata {
     return unitIntervalAttributeValue("generic.water_movement_efficiency");
   }
 
+  public double airDragModifier() {
+    return boundedAttributeValue("generic.air_drag_modifier", 1.0D, 0.0D, 2048.0D);
+  }
+
+  public double bounciness() {
+    return boundedAttributeValue("generic.bounciness", 0.0D, 0.0D, 1.0D);
+  }
+
+  public double frictionModifier() {
+    return boundedAttributeValue("generic.friction_modifier", 1.0D, 0.0D, 2048.0D);
+  }
+
   private double unitIntervalAttributeValue(String attributeKey) {
+    return boundedAttributeValue(attributeKey, 0.0D, 0.0D, 1.0D);
+  }
+
+  private double boundedAttributeValue(
+    String attributeKey,
+    double defaultValue,
+    double minValue,
+    double maxValue
+  ) {
     if (findAttribute(attributeKey) == null) {
-      return 0.0D;
+      return defaultValue;
     }
 
     double value = attributeValue(attributeKey);
-    return Double.isNaN(value) ? 0.0D : Math.max(0.0D, Math.min(1.0D, value));
+    return Double.isNaN(value) ? minValue : Math.max(minValue, Math.min(maxValue, value));
   }
 
   public double attributeValue(String key) {
@@ -340,6 +366,9 @@ public final class AbilityMetadata {
     modernRemap.put("generic.step_height", "step_height");
     modernRemap.put("generic.movement_efficiency", "movement_efficiency");
     modernRemap.put("generic.water_movement_efficiency", "water_movement_efficiency");
+    modernRemap.put("generic.air_drag_modifier", "air_drag_modifier");
+    modernRemap.put("generic.bounciness", "bounciness");
+    modernRemap.put("generic.friction_modifier", "friction_modifier");
     modernRemap.put("player.sneaking_speed", "sneaking_speed");
     modernRemap.put("player.block_interaction_range", "block_interaction_range");
     modernRemap.put("player.entity_interaction_range", "entity_interaction_range");

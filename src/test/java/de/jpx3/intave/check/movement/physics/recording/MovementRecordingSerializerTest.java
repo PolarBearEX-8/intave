@@ -30,6 +30,9 @@ import de.jpx3.intave.player.attribute.AttributeModifier;
 import de.jpx3.intave.resource.Resource;
 import de.jpx3.intave.resource.Resources;
 import de.jpx3.intave.share.*;
+import de.jpx3.intave.test.FakePlayerFactory;
+import de.jpx3.intave.user.meta.AbilityMetadata;
+import de.jpx3.intave.user.meta.ProtocolMetadata;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import org.bukkit.Material;
@@ -244,6 +247,47 @@ final class MovementRecordingSerializerTest {
 	}
 
 	@Test
+	void serializes262MovementAttributesForReplay() {
+		MinecraftVersion.setCurrent(MinecraftVersions.VER26_2);
+		AbilityMetadata recordedAbilities = new AbilityMetadata(
+			FakePlayerFactory.createPlayer((ignored, arguments) -> null)
+		);
+		recordedAbilities.modifyBaseValue("air_drag_modifier", 0.875D);
+		recordedAbilities.modifyBaseValue("bounciness", 0.625D);
+		recordedAbilities.modifyBaseValue("friction_modifier", 1.25D);
+
+		MovementRecording recording = MovementRecording.create(
+			ProtocolMetadata.VER_26_2,
+			MinecraftVersions.VER26_2
+		);
+		recording.insertFrame(
+			BoundingBox.empty(), Input.none(), Position.immutableEmpty(), Rotation.zero(),
+			new MockFullBlockStaticPlane(), recordedAbilities.attributeSnapshot(), false, Pose.STANDING
+		);
+
+		ByteBuf buffer = Unpooled.buffer();
+		try {
+			MovementRecording.STREAM_CODEC.encode(buffer, recording);
+			MovementRecording decoded = MovementRecording.STREAM_CODEC.decode(buffer);
+			Map<String, Attribute> decodedAttributes = decoded.attributesForFrame(0);
+
+			assertEquals(0.875D, decodedAttributes.get("air_drag_modifier").baseValue());
+			assertEquals(0.625D, decodedAttributes.get("bounciness").baseValue());
+			assertEquals(1.25D, decodedAttributes.get("friction_modifier").baseValue());
+
+			AbilityMetadata replayAbilities = new AbilityMetadata(
+				FakePlayerFactory.createPlayer((ignored, arguments) -> null)
+			);
+			replayAbilities.replaceAttributeSnapshot(decodedAttributes);
+			assertEquals(0.875D, replayAbilities.airDragModifier());
+			assertEquals(0.625D, replayAbilities.bounciness());
+			assertEquals(1.25D, replayAbilities.frictionModifier());
+		} finally {
+			buffer.release();
+		}
+	}
+
+	@Test
 	void serializesBlockVariantProperties() {
 		MovementRecording recording = MovementRecording.create();
 		BlockVariant variant = testVariant(7, Map.of("drag", true, "distance", 3, "facing", "north"));
@@ -292,6 +336,15 @@ final class MovementRecordingSerializerTest {
 			MovementRecording decoded = MovementRecording.STREAM_CODEC.decode(buf);
 
 			assertNull(decoded.frames().get(0).movementState());
+			assertTrue(decoded.attributesForFrame(0).isEmpty());
+			MinecraftVersion.setCurrent(MinecraftVersions.VER26_2);
+			AbilityMetadata replayAbilities = new AbilityMetadata(
+				FakePlayerFactory.createPlayer((ignored, arguments) -> null)
+			);
+			replayAbilities.replaceAttributeSnapshot(decoded.attributesForFrame(0));
+			assertEquals(1.0D, replayAbilities.airDragModifier());
+			assertEquals(0.0D, replayAbilities.bounciness());
+			assertEquals(1.0D, replayAbilities.frictionModifier());
 			deepEqualsCheck(recording, decoded);
 		} finally {
 			buf.release();

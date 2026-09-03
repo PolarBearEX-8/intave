@@ -27,6 +27,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.util.Collections;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -111,6 +113,72 @@ final class AbilityMetadataMovementAttributesTest {
     assertEquals(0.0D, abilities.stepHeight());
     assertEquals(0.0D, abilities.movementEfficiency());
     assertEquals(0.0D, abilities.waterMovementEfficiency());
+  }
+
+  @Test
+  void registers262MovementAttributesUnderTheirModernKeys() {
+    MinecraftVersion.setCurrent(MinecraftVersions.VER26_2);
+
+    AbilityMetadata abilities = abilities();
+    Attribute airDrag = abilities.findAttribute("generic.air_drag_modifier");
+    Attribute bounciness = abilities.findAttribute("generic.bounciness");
+    Attribute friction = abilities.findAttribute("generic.friction_modifier");
+
+    assertEquals("air_drag_modifier", airDrag.attributeKey());
+    assertEquals("bounciness", bounciness.attributeKey());
+    assertEquals("friction_modifier", friction.attributeKey());
+    assertSame(airDrag, abilities.findAttribute("air_drag_modifier"));
+    assertSame(bounciness, abilities.findAttribute("bounciness"));
+    assertSame(friction, abilities.findAttribute("friction_modifier"));
+    assertEquals(1.0D, abilities.airDragModifier());
+    assertEquals(0.0D, abilities.bounciness());
+    assertEquals(1.0D, abilities.frictionModifier());
+  }
+
+  @Test
+  void keeps262MovementAttributeDefaultsWhenTheyAreUnavailable() {
+    MinecraftVersion.setCurrent(new MinecraftVersion("26.1.2"));
+
+    AbilityMetadata abilities = abilities();
+
+    assertFalse(abilities.hasAttribute("air_drag_modifier"));
+    assertFalse(abilities.hasAttribute("bounciness"));
+    assertFalse(abilities.hasAttribute("friction_modifier"));
+    assertEquals(1.0D, abilities.airDragModifier());
+    assertEquals(0.0D, abilities.bounciness());
+    assertEquals(1.0D, abilities.frictionModifier());
+  }
+
+  @Test
+  void exposes262MovementAttributesWithClientBounds() {
+    MinecraftVersion.setCurrent(MinecraftVersions.VER26_2);
+    AbilityMetadata abilities = abilities();
+
+    abilities.modifyBaseValue("air_drag_modifier", 4096.0D);
+    abilities.modifyBaseValue("bounciness", 2.0D);
+    abilities.modifyBaseValue("friction_modifier", -1.0D);
+    assertEquals(2048.0D, abilities.airDragModifier());
+    assertEquals(1.0D, abilities.bounciness());
+    assertEquals(0.0D, abilities.frictionModifier());
+
+    abilities.modifyBaseValue("air_drag_modifier", Double.NaN);
+    abilities.modifyBaseValue("bounciness", Double.NaN);
+    abilities.modifyBaseValue("friction_modifier", Double.NaN);
+    assertEquals(0.0D, abilities.airDragModifier());
+    assertEquals(0.0D, abilities.bounciness());
+    assertEquals(0.0D, abilities.frictionModifier());
+  }
+
+  @Test
+  void oldRecordingSnapshotsRetain262IdentityDefaults() {
+    MinecraftVersion.setCurrent(MinecraftVersions.VER26_2);
+    AbilityMetadata abilities = abilities();
+
+    abilities.replaceAttributeSnapshot(Collections.emptyMap());
+
+    assertEquals(1.0D, abilities.airDragModifier());
+    assertEquals(0.0D, abilities.bounciness());
+    assertEquals(1.0D, abilities.frictionModifier());
   }
 
   @Test

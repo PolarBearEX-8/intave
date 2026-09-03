@@ -32,7 +32,7 @@ final class v16FluidResolver implements FluidResolver {
       fallingProperty = !dry && MaterialMagic.isLavaOrWater(type) && level >= 8;
     }
     float height = level / 9f;
-    return select(isWater, isLava, dry, fallingProperty, height, level);
+    return select(isWater, isLava, dry, source, fallingProperty, height, level);
   }
 }
 

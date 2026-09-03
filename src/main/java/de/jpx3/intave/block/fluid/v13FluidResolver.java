@@ -32,6 +32,6 @@ final class v13FluidResolver implements FluidResolver {
     }
     float height = fluid.getHeight();
     int level = MaterialMagic.isLavaOrWater(type) ? variant.propertyOf("level") : 8;
-    return select(isWater, isLava, dry, fallingProperty, height, level);
+    return select(isWater, isLava, dry, source, fallingProperty, height, level);
   }
 }

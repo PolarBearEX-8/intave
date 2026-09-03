@@ -25,6 +25,7 @@ import org.bukkit.Material;
 import org.bukkit.World;
 
 import static de.jpx3.intave.block.collision.Collision.rasterizedLiquidPresentSearch;
+import static de.jpx3.intave.share.ClientMath.clamp_float;
 import static de.jpx3.intave.share.ClientMath.floor;
 
 public final class MovementCharacteristics {
@@ -47,32 +48,56 @@ public final class MovementCharacteristics {
     World world = user.player().getWorld();
     float speed;
     if (environment.lastOnGround()) {
-      float slipperiness = currentSlipperiness(
-        user,
+      float blockFriction = currentBlockFriction(
+        user, environment,
         world,
         positionX,
         positionY - environment.frictionPosSubtraction(),
         positionZ
       );
-      float var4 = environment.frictionMultiplier() / (slipperiness * slipperiness * slipperiness);
-      speed = environment.aiMoveSpeed(sprinting) * var4;
+      if (user.meta().protocol().supportsMovementAttributes()) {
+        blockFriction = computeModifiedFriction(
+          blockFriction,
+          (float) user.meta().abilities().frictionModifier()
+        );
+        speed = blockFriction > 0.6F
+          ? environment.aiMoveSpeed(sprinting)
+            * (0.21600002F / (blockFriction * blockFriction * blockFriction))
+          : environment.aiMoveSpeed(sprinting);
+      } else {
+        float slipperiness = blockFriction * 0.91F;
+        float legacyGroundAcceleration = environment.frictionMultiplier()
+          / (slipperiness * slipperiness * slipperiness);
+        speed = environment.aiMoveSpeed(sprinting) * legacyGroundAcceleration;
+      }
     } else {
       speed = environment.jumpMovementFactor();
     }
     return speed;
   }
 
-  public static float currentSlipperiness(User user, World world, double blockPositionX, double blockPositionY, double blockPositionZ) {
+  public static float currentBlockFriction(
+    User user,
+    SimulationEnvironment environment,
+    World world,
+    double blockPositionX,
+    double blockPositionY,
+    double blockPositionZ
+  ) {
     Material type;
 
     boolean improvedSlipperiness = user.meta().protocol().trailsAndTailsUpdate();
     if (improvedSlipperiness) {
-      type = user.meta().movement().frictionMaterial();
+      type = environment.frictionMaterial();
     } else {
       type = VolatileBlockAccess.typeAccess(user, world, blockPositionX, blockPositionY, blockPositionZ);
     }
 
-    return BlockProperties.of(type).slipperiness() * 0.91f;
+    return BlockProperties.of(type).slipperiness();
+  }
+
+  public static float computeModifiedFriction(float friction, float modifier) {
+    return clamp_float(1.0F - (1.0F - friction) * modifier, 0.0F, 1.0F);
   }
 
   public static boolean isOffsetPositionInLiquid(

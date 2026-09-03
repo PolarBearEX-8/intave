@@ -40,6 +40,7 @@ public class Timings {
   public static final Timing CHECK_PHYSICS_SIMULATOR_BASE_COLLIDER_SHAPE_LOOKUP = Timing.of("Check/Physics/Simulator/Base/Collider/ShapeLookup", "Check/Physics/Simulator/Base/Collider");
   public static final Timing CHECK_PHYSICS_SIMULATOR_BOAT = Timing.of("Check/Physics/Simulator/Boat", "Check/Physics/Simulator");
   public static final Timing CHECK_PHYSICS_SIMULATOR_ELYTRA = Timing.of("Check/Physics/Simulator/Elytra", "Check/Physics/Simulator");
+  public static final Timing CHECK_PHYSICS_SIMULATOR_BLOCK_TICK_ENTITIES = Timing.of("Check/Physics/Simulator/BlockTickEntities", "Check/Physics/Simulator");
   public static final Timing CHECK_PHYSICS_EVAL = Timing.of("Check/Physics/Eval", "Check/Physics/Proc");
   public static final Timing CHECK_PHYSICS_EVAL_HORIZONTAL = Timing.of("Check/Physics/Eval/H", "Check/Physics/Eval");
   public static final Timing CHECK_PHYSICS_EVAL_VERTICAL = Timing.of("Check/Physics/Eval/V", "Check/Physics/Eval");
