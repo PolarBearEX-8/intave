@@ -705,7 +705,7 @@ class BaseSimulator extends Simulator {
         Material effectBlock = environment.collideMaterial();
         restitution = !(-currentMotionY < gravity)
           && !suppressingBounce
-          && !HONEY_BLOCK.equals(effectBlock)
+          && (HONEY_BLOCK != null && !HONEY_BLOCK.equals(effectBlock))
           ? Math.max(restitution, BlockProperties.of(effectBlock).bounceRestitution())
           : 0.0D;
       }
